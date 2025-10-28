@@ -1,10 +1,12 @@
 import { useState } from "react";
-import { FileText, Shield, Sparkles } from "lucide-react";
+import { FileText, Shield, Sparkles, LogOut, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { FileUploader } from "@/components/FileUploader";
 import { AnalysisProgress } from "@/components/AnalysisProgress";
 import { AnalysisResults, AnalysisIssue } from "@/components/AnalysisResults";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/contexts/AuthContext";
+import { useNavigate } from "react-router-dom";
 
 type AnalysisState = "idle" | "analyzing" | "completed";
 
@@ -17,6 +19,8 @@ const Index = () => {
     status: "approved" | "rejected" | "needs-revision";
   } | null>(null);
   const { toast } = useToast();
+  const { user, isAdmin, signOut } = useAuth();
+  const navigate = useNavigate();
 
   const getStepStatus = (stepIndex: number): "pending" | "in-progress" | "completed" | "error" => {
     if (analysisState === "idle") return "pending";
@@ -130,17 +134,34 @@ const Index = () => {
       {/* 헤더 */}
       <header className="border-b bg-card shadow-soft">
         <div className="container mx-auto px-4 py-6">
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-gradient-primary">
-              <Shield className="w-6 h-6 text-white" />
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-gradient-primary">
+                <Shield className="w-6 h-6 text-white" />
+              </div>
+              <div>
+                <h1 className="text-2xl font-bold text-foreground">
+                  의료기기 허가 신고서 자동 검토 시스템
+                </h1>
+                <p className="text-sm text-muted-foreground">
+                  AI 기반 규정 준수 검사 및 문서 분석
+                </p>
+              </div>
             </div>
-            <div>
-              <h1 className="text-2xl font-bold text-foreground">
-                의료기기 허가 신고서 자동 검토 시스템
-              </h1>
-              <p className="text-sm text-muted-foreground">
-                AI 기반 규정 준수 검사 및 문서 분석
-              </p>
+            <div className="flex items-center gap-2">
+              {isAdmin && (
+                <Button
+                  variant="outline"
+                  onClick={() => navigate("/admin")}
+                >
+                  <Settings className="w-4 h-4 mr-2" />
+                  관리자 페이지
+                </Button>
+              )}
+              <Button variant="ghost" onClick={signOut}>
+                <LogOut className="w-4 h-4 mr-2" />
+                로그아웃
+              </Button>
             </div>
           </div>
         </div>

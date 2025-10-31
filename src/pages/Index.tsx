@@ -3,10 +3,11 @@ import { FileText, Shield, Sparkles, LogOut, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { FileUploader } from "@/components/FileUploader";
 import { AnalysisProgress } from "@/components/AnalysisProgress";
-import { AnalysisResults, AnalysisIssue } from "@/components/AnalysisResults";
+import AnalysisResults from "@/components/AnalysisResults";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
+import { supabase } from "@/integrations/supabase/client";
 
 type AnalysisState = "idle" | "analyzing" | "completed";
 
@@ -14,10 +15,7 @@ const Index = () => {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [analysisState, setAnalysisState] = useState<AnalysisState>("idle");
   const [progress, setProgress] = useState(0);
-  const [analysisResults, setAnalysisResults] = useState<{
-    issues: AnalysisIssue[];
-    status: "approved" | "rejected" | "needs-revision";
-  } | null>(null);
+  const [selectedSubmissionId, setSelectedSubmissionId] = useState<string | null>(null);
   const { toast } = useToast();
   const { user, isAdmin, signOut } = useAuth();
   const navigate = useNavigate();
@@ -43,90 +41,94 @@ const Index = () => {
     { id: "5", title: "최종 리포트 생성", status: getStepStatus(4) },
   ];
 
-  const handleFileSelect = (file: File) => {
+  const handleFileSelect = async (file: File) => {
     setSelectedFile(file);
-    toast({
-      title: "파일 업로드 완료",
-      description: `${file.name} 파일이 선택되었습니다.`,
-    });
+    setAnalysisState("analyzing");
+    setProgress(20);
+
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        throw new Error('인증이 필요합니다');
+      }
+
+      // Upload file to storage
+      const filePath = `${user.id}/${Date.now()}_${file.name}`;
+      const { error: uploadError } = await supabase.storage
+        .from('submissions')
+        .upload(filePath, file);
+
+      if (uploadError) throw uploadError;
+
+      setProgress(40);
+
+      // Create submission record
+      const { data: submission, error: submissionError } = await supabase
+        .from('submissions')
+        .insert({
+          user_id: user.id,
+          title: file.name,
+          file_path: filePath,
+          file_size: file.size,
+          status: 'pending',
+        })
+        .select()
+        .single();
+
+      if (submissionError) throw submissionError;
+
+      setProgress(60);
+
+      // Process document
+      const { error: processError } = await supabase.functions.invoke('process-document', {
+        body: {
+          submissionId: submission.id,
+          filePath,
+          isRegulation: false,
+        },
+      });
+
+      if (processError) {
+        console.error('Processing error:', processError);
+      }
+
+      setProgress(80);
+
+      // Analyze submission
+      const { error: analyzeError } = await supabase.functions.invoke('analyze-submission', {
+        body: { submissionId: submission.id },
+      });
+
+      if (analyzeError) {
+        console.error('Analysis error:', analyzeError);
+      }
+
+      setProgress(100);
+      setSelectedSubmissionId(submission.id);
+      setAnalysisState("completed");
+
+      toast({
+        title: "분석 완료",
+        description: "문서 검토가 완료되었습니다.",
+      });
+
+    } catch (error) {
+      console.error('Error:', error);
+      toast({
+        title: "오류 발생",
+        description: error instanceof Error ? error.message : "알 수 없는 오류가 발생했습니다.",
+        variant: "destructive",
+      });
+      setAnalysisState("idle");
+      setSelectedFile(null);
+    }
   };
 
   const handleClearFile = () => {
     setSelectedFile(null);
     setAnalysisState("idle");
     setProgress(0);
-    setAnalysisResults(null);
-  };
-
-  const simulateAnalysis = () => {
-    setAnalysisState("analyzing");
-    setProgress(0);
-
-    const interval = setInterval(() => {
-      setProgress((prev) => {
-        if (prev >= 100) {
-          clearInterval(interval);
-          setAnalysisState("completed");
-          
-          // 시뮬레이션된 분석 결과
-          setAnalysisResults({
-            status: "needs-revision",
-            issues: [
-              {
-                id: "1",
-                category: "작용원리",
-                severity: "error",
-                title: "멸균/비멸균 표기 혼용",
-                description: "작용원리 섹션에서 '멸균' 및 '비멸균' 표현이 동시에 사용되었습니다.",
-                location: "페이지 3, 작용원리 섹션 2번째 단락",
-                suggestion: "제품의 멸균 여부를 명확히 하여 하나의 표현만 사용하시기 바랍니다.",
-                regulation: "의료기기법 시행규칙 제23조 제1항",
-              },
-              {
-                id: "2",
-                category: "치수 및 형상",
-                severity: "warning",
-                title: "치수 표기 단위 불일치",
-                description: "일부 치수가 mm로, 일부는 cm로 표기되어 일관성이 부족합니다.",
-                location: "페이지 5, 치수 및 형상 표",
-                suggestion: "모든 치수를 동일한 단위(mm 권장)로 통일하여 표기하시기 바랍니다.",
-                regulation: "의료기기 기술문서 작성 가이드라인 3.2절",
-              },
-              {
-                id: "3",
-                category: "원재료",
-                severity: "error",
-                title: "원재료 안전성 자료 누락",
-                description: "사용된 원재료 중 생체적합성 시험 결과가 누락되었습니다.",
-                location: "페이지 8, 원재료 명세 표",
-                suggestion: "ISO 10993 기준에 따른 생체적합성 시험 결과를 추가하시기 바랍니다.",
-                regulation: "의료기기법 제6조, ISO 10993",
-              },
-            ],
-          });
-          
-          return 100;
-        }
-        return prev + 5;
-      });
-    }, 200);
-  };
-
-  const handleAnalyze = () => {
-    if (!selectedFile) {
-      toast({
-        title: "파일을 선택해주세요",
-        description: "분석할 PDF 파일을 먼저 업로드해주세요.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    simulateAnalysis();
-    toast({
-      title: "분석 시작",
-      description: "신고서 검토를 시작합니다. 잠시만 기다려주세요.",
-    });
+    setSelectedSubmissionId(null);
   };
 
   return (
@@ -194,31 +196,14 @@ const Index = () => {
             onClear={handleClearFile}
           />
 
-          {/* 분석 버튼 */}
-          {selectedFile && analysisState === "idle" && (
-            <div className="flex justify-center animate-fade-in">
-              <Button
-                size="lg"
-                onClick={handleAnalyze}
-                className="bg-gradient-primary shadow-medium hover:shadow-soft transition-all"
-              >
-                <FileText className="w-5 h-5 mr-2" />
-                검토 시작
-              </Button>
-            </div>
-          )}
-
           {/* 분석 진행 상태 */}
           {analysisState === "analyzing" && (
             <AnalysisProgress steps={analysisSteps} currentProgress={progress} />
           )}
 
           {/* 분석 결과 */}
-          {analysisState === "completed" && analysisResults && (
-            <AnalysisResults
-              issues={analysisResults.issues}
-              overallStatus={analysisResults.status}
-            />
+          {analysisState === "completed" && selectedSubmissionId && (
+            <AnalysisResults submissionId={selectedSubmissionId} />
           )}
         </div>
       </main>

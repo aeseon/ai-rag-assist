@@ -1,25 +1,75 @@
-import { AlertTriangle, CheckCircle, XCircle, FileText } from "lucide-react";
+import { useEffect, useState } from 'react';
+import { supabase } from '@/integrations/supabase/client';
+import { AlertTriangle, CheckCircle, XCircle, FileText, Loader2 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 
-export interface AnalysisIssue {
+interface AnalysisIssue {
   id: string;
   category: string;
   severity: "error" | "warning" | "info";
   title: string;
   description: string;
-  location: string;
-  suggestion: string;
-  regulation: string;
+  location?: string;
+  suggestion?: string;
+  regulation?: string;
 }
 
 interface AnalysisResultsProps {
-  issues: AnalysisIssue[];
-  overallStatus: "approved" | "rejected" | "needs-revision";
+  submissionId: string;
 }
 
-export const AnalysisResults = ({ issues, overallStatus }: AnalysisResultsProps) => {
+const AnalysisResults = ({ submissionId }: AnalysisResultsProps) => {
+  const [issues, setIssues] = useState<AnalysisIssue[]>([]);
+  const [overallStatus, setOverallStatus] = useState<string>('');
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchAnalysisResults();
+  }, [submissionId]);
+
+  const fetchAnalysisResults = async () => {
+    try {
+      const { data: analysisResult, error: analysisError } = await supabase
+        .from('analysis_results')
+        .select('*, analysis_issues(*)')
+        .eq('submission_id', submissionId)
+        .maybeSingle();
+
+      if (analysisError) throw analysisError;
+
+      if (analysisResult) {
+        setOverallStatus(analysisResult.overall_status);
+        const mappedIssues = (analysisResult.analysis_issues || []).map((issue: any) => ({
+          id: issue.id,
+          category: issue.category,
+          severity: issue.severity as "error" | "warning" | "info",
+          title: issue.title,
+          description: issue.description,
+          location: issue.location || undefined,
+          suggestion: issue.suggestion || undefined,
+          regulation: issue.regulation || undefined,
+        }));
+        setIssues(mappedIssues);
+      }
+    } catch (error) {
+      console.error('Error fetching analysis results:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <Card className="p-12">
+        <div className="flex flex-col items-center justify-center gap-4">
+          <Loader2 className="h-12 w-12 animate-spin text-muted-foreground" />
+          <p className="text-muted-foreground">분석 결과를 불러오는 중...</p>
+        </div>
+      </Card>
+    );
+  }
   const errorCount = issues.filter((i) => i.severity === "error").length;
   const warningCount = issues.filter((i) => i.severity === "warning").length;
 
@@ -47,7 +97,7 @@ export const AnalysisResults = ({ issues, overallStatus }: AnalysisResultsProps)
 
   const getStatusConfig = () => {
     switch (overallStatus) {
-      case "approved":
+      case "compliant":
         return {
           icon: <CheckCircle className="w-8 h-8 text-accent" />,
           title: "승인",
@@ -55,7 +105,7 @@ export const AnalysisResults = ({ issues, overallStatus }: AnalysisResultsProps)
           bgColor: "bg-accent/10",
           borderColor: "border-accent/30",
         };
-      case "rejected":
+      case "non_compliant":
         return {
           icon: <XCircle className="w-8 h-8 text-destructive" />,
           title: "반려",
@@ -130,18 +180,24 @@ export const AnalysisResults = ({ issues, overallStatus }: AnalysisResultsProps)
                       <h4 className="text-sm font-semibold text-foreground mb-1">문제점</h4>
                       <p className="text-sm text-muted-foreground">{issue.description}</p>
                     </div>
-                    <div>
-                      <h4 className="text-sm font-semibold text-foreground mb-1">위치</h4>
-                      <p className="text-sm text-muted-foreground">{issue.location}</p>
-                    </div>
-                    <div>
-                      <h4 className="text-sm font-semibold text-foreground mb-1">수정 제안</h4>
-                      <p className="text-sm text-muted-foreground">{issue.suggestion}</p>
-                    </div>
-                    <div>
-                      <h4 className="text-sm font-semibold text-foreground mb-1">관련 규정</h4>
-                      <p className="text-sm text-primary">{issue.regulation}</p>
-                    </div>
+                    {issue.location && (
+                      <div>
+                        <h4 className="text-sm font-semibold text-foreground mb-1">위치</h4>
+                        <p className="text-sm text-muted-foreground">{issue.location}</p>
+                      </div>
+                    )}
+                    {issue.suggestion && (
+                      <div>
+                        <h4 className="text-sm font-semibold text-foreground mb-1">수정 제안</h4>
+                        <p className="text-sm text-muted-foreground">{issue.suggestion}</p>
+                      </div>
+                    )}
+                    {issue.regulation && (
+                      <div>
+                        <h4 className="text-sm font-semibold text-foreground mb-1">관련 규정</h4>
+                        <p className="text-sm text-primary">{issue.regulation}</p>
+                      </div>
+                    )}
                   </div>
                 </AccordionContent>
               </AccordionItem>
@@ -152,3 +208,5 @@ export const AnalysisResults = ({ issues, overallStatus }: AnalysisResultsProps)
     </div>
   );
 };
+
+export default AnalysisResults;

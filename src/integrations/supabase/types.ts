@@ -14,6 +14,82 @@ export type Database = {
   }
   public: {
     Tables: {
+      analysis_issues: {
+        Row: {
+          analysis_result_id: string | null
+          category: string
+          created_at: string | null
+          description: string
+          id: string
+          location: string | null
+          regulation: string | null
+          severity: string
+          suggestion: string | null
+          title: string
+        }
+        Insert: {
+          analysis_result_id?: string | null
+          category: string
+          created_at?: string | null
+          description: string
+          id?: string
+          location?: string | null
+          regulation?: string | null
+          severity: string
+          suggestion?: string | null
+          title: string
+        }
+        Update: {
+          analysis_result_id?: string | null
+          category?: string
+          created_at?: string | null
+          description?: string
+          id?: string
+          location?: string | null
+          regulation?: string | null
+          severity?: string
+          suggestion?: string | null
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "analysis_issues_analysis_result_id_fkey"
+            columns: ["analysis_result_id"]
+            isOneToOne: false
+            referencedRelation: "analysis_results"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      analysis_results: {
+        Row: {
+          created_at: string | null
+          id: string
+          overall_status: string
+          submission_id: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          overall_status: string
+          submission_id?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          overall_status?: string
+          submission_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "analysis_results_submission_id_fkey"
+            columns: ["submission_id"]
+            isOneToOne: false
+            referencedRelation: "submissions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           created_at: string
@@ -34,6 +110,41 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      regulation_chunks: {
+        Row: {
+          chunk_index: number
+          content: string
+          created_at: string | null
+          embedding: string | null
+          id: string
+          regulation_id: string | null
+        }
+        Insert: {
+          chunk_index: number
+          content: string
+          created_at?: string | null
+          embedding?: string | null
+          id?: string
+          regulation_id?: string | null
+        }
+        Update: {
+          chunk_index?: number
+          content?: string
+          created_at?: string | null
+          embedding?: string | null
+          id?: string
+          regulation_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "regulation_chunks_regulation_id_fkey"
+            columns: ["regulation_id"]
+            isOneToOne: false
+            referencedRelation: "regulations"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       regulations: {
         Row: {
@@ -80,6 +191,74 @@ export type Database = {
         }
         Relationships: []
       }
+      submission_chunks: {
+        Row: {
+          chunk_index: number
+          content: string
+          created_at: string | null
+          embedding: string | null
+          id: string
+          submission_id: string | null
+        }
+        Insert: {
+          chunk_index: number
+          content: string
+          created_at?: string | null
+          embedding?: string | null
+          id?: string
+          submission_id?: string | null
+        }
+        Update: {
+          chunk_index?: number
+          content?: string
+          created_at?: string | null
+          embedding?: string | null
+          id?: string
+          submission_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "submission_chunks_submission_id_fkey"
+            columns: ["submission_id"]
+            isOneToOne: false
+            referencedRelation: "submissions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      submissions: {
+        Row: {
+          created_at: string | null
+          file_path: string
+          file_size: number
+          id: string
+          status: string
+          title: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          file_path: string
+          file_size: number
+          id?: string
+          status?: string
+          title: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          file_path?: string
+          file_size?: number
+          id?: string
+          status?: string
+          title?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       user_roles: {
         Row: {
           created_at: string
@@ -112,6 +291,19 @@ export type Database = {
           _user_id: string
         }
         Returns: boolean
+      }
+      search_similar_regulations: {
+        Args: {
+          match_count?: number
+          match_threshold?: number
+          query_embedding: string
+        }
+        Returns: {
+          content: string
+          id: string
+          regulation_id: string
+          similarity: number
+        }[]
       }
     }
     Enums: {

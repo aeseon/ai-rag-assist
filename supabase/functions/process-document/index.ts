@@ -59,60 +59,17 @@ Deno.serve(async (req) => {
 
     console.log(`Extracted ~${extractedText.length} characters (lightweight mode)`);
 
-    // Chunk the document (split into ~500 word chunks)
+    // Chunk the document (split into ~500 word chunks) for storage
     const chunks = chunkText(extractedText, 500);
-    console.log(`Created ${chunks.length} chunks`);
+    console.log(`Created ${chunks.length} chunks for storage`);
 
-    // Prepare AI key for embeddings
-    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
-    if (!LOVABLE_API_KEY) {
-      throw new Error('LOVABLE_API_KEY not configured');
-    }
-
-    // Generate embeddings for each chunk
-    console.log('Generating embeddings...');
-    const chunksWithEmbeddings = await Promise.all(
-      chunks.map(async (content, index) => {
-        const embeddingResponse = await fetch('https://ai.gateway.lovable.dev/v1/embeddings', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${LOVABLE_API_KEY}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            model: 'google/gemini-2.5-flash',
-            input: content,
-          }),
-        });
-
-        if (!embeddingResponse.ok) {
-          const errorText = await embeddingResponse.text();
-          console.error(`Embedding API error for chunk ${index}:`, {
-            status: embeddingResponse.status,
-            statusText: embeddingResponse.statusText,
-            body: errorText
-          });
-          throw new Error(`Embedding generation failed for chunk ${index}: ${embeddingResponse.status} - ${errorText}`);
-        }
-
-        const embeddingResult = await embeddingResponse.json();
-        const embedding = embeddingResult.data[0].embedding;
-
-        return {
-          content,
-          embedding,
-          chunk_index: index,
-        };
-      })
-    );
-
-    // Store chunks with embeddings
+    // Store chunks WITHOUT embeddings (Lovable AI doesn't support embedding API)
     if (isRegulation && regulationId) {
-      const chunksToInsert = chunksWithEmbeddings.map(chunk => ({
+      const chunksToInsert = chunks.map((content, index) => ({
         regulation_id: regulationId,
-        content: chunk.content,
-        embedding: JSON.stringify(chunk.embedding),
-        chunk_index: chunk.chunk_index,
+        content,
+        embedding: null, // No embeddings
+        chunk_index: index,
       }));
 
       const { error: insertError } = await supabase
@@ -124,11 +81,11 @@ Deno.serve(async (req) => {
         throw insertError;
       }
     } else {
-      const chunksToInsert = chunksWithEmbeddings.map(chunk => ({
+      const chunksToInsert = chunks.map((content, index) => ({
         submission_id: submissionId,
-        content: chunk.content,
-        embedding: JSON.stringify(chunk.embedding),
-        chunk_index: chunk.chunk_index,
+        content,
+        embedding: null, // No embeddings
+        chunk_index: index,
       }));
 
       const { error: insertError } = await supabase

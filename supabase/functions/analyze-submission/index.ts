@@ -33,12 +33,12 @@ Deno.serve(async (req) => {
 
     const { submissionId } = await req.json() as AnalyzeRequest;
     
-    console.log('Starting RAG analysis for submission:', submissionId);
+    console.log('Starting direct comparison analysis for submission:', submissionId);
 
-    // Get submission chunks with embeddings
+    // Get submission chunks (no embeddings needed)
     const { data: submissionChunks, error: chunksError } = await supabase
       .from('submission_chunks')
-      .select('content, embedding')
+      .select('content')
       .eq('submission_id', submissionId)
       .order('chunk_index');
 
@@ -49,7 +49,6 @@ Deno.serve(async (req) => {
 
     if (!submissionChunks || submissionChunks.length === 0) {
       console.error('No chunks found for submission:', submissionId);
-      // Check if submission exists
       const { data: submission } = await supabase
         .from('submissions')
         .select('id, status')
@@ -62,52 +61,36 @@ Deno.serve(async (req) => {
 
     console.log(`Retrieved ${submissionChunks.length} submission chunks`);
 
+    // Combine all submission chunks into full text
+    const submissionText = submissionChunks.map(c => c.content).join('\n\n');
+
+    // Get all regulation chunks
+    const { data: regulationChunks, error: regError } = await supabase
+      .from('regulation_chunks')
+      .select('content')
+      .order('chunk_index');
+
+    if (regError || !regulationChunks || regulationChunks.length === 0) {
+      console.log('No regulation data found, proceeding with general analysis');
+    }
+
+    const regulationText = regulationChunks?.map(c => c.content).join('\n\n') || 'No regulation data available.';
+
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
     if (!LOVABLE_API_KEY) {
       throw new Error('LOVABLE_API_KEY not configured');
     }
 
-    // For each submission chunk, find similar regulation chunks
-    const allIssues: AnalysisIssue[] = [];
-    
-    for (const submissionChunk of submissionChunks) {
-      console.log('Analyzing chunk...');
-      
-      // Parse embedding (stored as JSON string)
-      const embedding = typeof submissionChunk.embedding === 'string' 
-        ? JSON.parse(submissionChunk.embedding)
-        : submissionChunk.embedding;
+    console.log('Analyzing submission with AI...');
 
-      // Search for similar regulation chunks
-      const { data: similarRegulations, error: searchError } = await supabase
-        .rpc('search_similar_regulations', {
-          query_embedding: embedding,
-          match_threshold: 0.6,
-          match_count: 5
-        });
-
-      if (searchError) {
-        console.error('Error searching similar regulations:', searchError);
-        continue;
-      }
-
-      if (!similarRegulations || similarRegulations.length === 0) {
-        console.log('No similar regulations found for chunk');
-        continue;
-      }
-
-      // Use AI to compare submission chunk with relevant regulation chunks
-      const regulationContext = similarRegulations
-        .map((reg: any) => `[Regulation] ${reg.content}`)
-        .join('\n\n');
-
-      const analysisPrompt = `You are a medical device regulation compliance expert. Analyze the following medical device submission content against relevant regulations and identify any compliance issues.
+    // Use AI to compare submission with regulations directly
+    const analysisPrompt = `You are a medical device regulation compliance expert. Analyze the following medical device submission content against relevant regulations and identify any compliance issues.
 
 Submission Content:
-${submissionChunk.content}
+${submissionText.substring(0, 15000)} ${submissionText.length > 15000 ? '...(truncated)' : ''}
 
 Relevant Regulations:
-${regulationContext}
+${regulationText.substring(0, 10000)} ${regulationText.length > 10000 ? '...(truncated)' : ''}
 
 Analyze the submission for compliance with the regulations. For each issue found, provide:
 1. Category (e.g., "Safety Requirements", "Documentation", "Testing", "Labeling")
@@ -121,44 +104,45 @@ Analyze the submission for compliance with the regulations. For each issue found
 Return the analysis as a JSON array of issues. If no issues are found, return an empty array.
 Format: [{"category": "...", "severity": "...", "title": "...", "description": "...", "location": "...", "suggestion": "...", "regulation": "..."}]`;
 
-      const analysisResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${LOVABLE_API_KEY}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          model: 'google/gemini-2.5-flash',
-          messages: [
-            {
-              role: 'system',
-              content: 'You are a medical device regulation compliance expert. Analyze submissions and return findings as valid JSON arrays only.'
-            },
-            {
-              role: 'user',
-              content: analysisPrompt
-            }
-          ],
-        }),
-      });
+    const analysisResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${LOVABLE_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'google/gemini-2.5-flash',
+        messages: [
+          {
+            role: 'system',
+            content: 'You are a medical device regulation compliance expert. Analyze submissions and return findings as valid JSON arrays only.'
+          },
+          {
+            role: 'user',
+            content: analysisPrompt
+          }
+        ],
+      }),
+    });
 
-      if (!analysisResponse.ok) {
-        console.error('AI analysis failed:', analysisResponse.status);
-        continue;
-      }
+    if (!analysisResponse.ok) {
+      const errorText = await analysisResponse.text();
+      console.error('AI analysis failed:', analysisResponse.status, errorText);
+      throw new Error(`AI analysis failed: ${analysisResponse.status}`);
+    }
 
-      const analysisResult = await analysisResponse.json();
-      const analysisText = analysisResult.choices[0].message.content;
+    const aiResponse = await analysisResponse.json();
+    const analysisText = aiResponse.choices[0].message.content;
 
-      // Extract JSON from response
-      const jsonMatch = analysisText.match(/\[[\s\S]*\]/);
-      if (jsonMatch) {
-        try {
-          const issues = JSON.parse(jsonMatch[0]) as AnalysisIssue[];
-          allIssues.push(...issues);
-        } catch (parseError) {
-          console.error('Failed to parse AI response:', parseError);
-        }
+    // Extract JSON from response
+    const jsonMatch = analysisText.match(/\[[\s\S]*\]/);
+    let allIssues: AnalysisIssue[] = [];
+    
+    if (jsonMatch) {
+      try {
+        allIssues = JSON.parse(jsonMatch[0]) as AnalysisIssue[];
+      } catch (parseError) {
+        console.error('Failed to parse AI response:', parseError);
       }
     }
 

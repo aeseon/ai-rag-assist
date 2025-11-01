@@ -86,7 +86,13 @@ Deno.serve(async (req) => {
         });
 
         if (!embeddingResponse.ok) {
-          throw new Error(`Embedding generation failed for chunk ${index}`);
+          const errorText = await embeddingResponse.text();
+          console.error(`Embedding API error for chunk ${index}:`, {
+            status: embeddingResponse.status,
+            statusText: embeddingResponse.statusText,
+            body: errorText
+          });
+          throw new Error(`Embedding generation failed for chunk ${index}: ${embeddingResponse.status} - ${errorText}`);
         }
 
         const embeddingResult = await embeddingResponse.json();

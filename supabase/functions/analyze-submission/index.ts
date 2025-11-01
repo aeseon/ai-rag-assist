@@ -1,4 +1,4 @@
-import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+// @deno-types="npm:@supabase/supabase-js@2"
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
 const corsHeaders = {

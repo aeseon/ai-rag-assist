@@ -1,3 +1,4 @@
+// @deno-types="npm:@supabase/supabase-js@2"
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { pdfText } from "jsr:@pdf/pdftext@1.3.2";
 

@@ -20,6 +20,21 @@ const Index = () => {
   const { user, isAdmin, signOut } = useAuth();
   const navigate = useNavigate();
 
+  // Sanitize filename to ASCII-safe to avoid Storage "Invalid key" errors
+  const sanitizeFilename = (name: string) => {
+    const extMatch = name.match(/\.[^./\\]+$/);
+    const ext = extMatch ? extMatch[0].toLowerCase() : '';
+    const base = name.slice(0, name.length - (ext ? ext.length : 0));
+    // Normalize and remove diacritics, then replace non-alphanumerics with underscores
+    const safeBase = base
+      .normalize('NFKD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-zA-Z0-9-_]+/g, '_')
+      .replace(/^_+|_+$/g, '')
+      .slice(0, 100) || 'file';
+    return `${safeBase}${ext || '.pdf'}`;
+  };
+
   const getStepStatus = (stepIndex: number): "pending" | "in-progress" | "completed" | "error" => {
     if (analysisState === "idle") return "pending";
     if (analysisState === "completed") return "completed";
@@ -54,11 +69,15 @@ const Index = () => {
 
       // Upload file to storage with sanitized filename
       const timestamp = Date.now();
-      const sanitizedName = encodeURIComponent(file.name);
+      const sanitizedName = sanitizeFilename(file.name);
       const filePath = `${user.id}/${timestamp}_${sanitizedName}`;
       const { error: uploadError } = await supabase.storage
         .from('submissions')
-        .upload(filePath, file);
+        .upload(filePath, file, {
+          cacheControl: '3600',
+          contentType: file.type || 'application/pdf',
+          upsert: false,
+        });
 
       if (uploadError) throw uploadError;
 

@@ -52,8 +52,10 @@ const Index = () => {
         throw new Error('인증이 필요합니다');
       }
 
-      // Upload file to storage
-      const filePath = `${user.id}/${Date.now()}_${file.name}`;
+      // Upload file to storage with sanitized filename
+      const timestamp = Date.now();
+      const sanitizedName = encodeURIComponent(file.name);
+      const filePath = `${user.id}/${timestamp}_${sanitizedName}`;
       const { error: uploadError } = await supabase.storage
         .from('submissions')
         .upload(filePath, file);

@@ -23,7 +23,9 @@ export type Database = {
           id: string
           location: string | null
           regulation: string | null
+          regulation_highlight: string | null
           severity: string
+          submission_highlight: string | null
           suggestion: string | null
           title: string
         }
@@ -35,7 +37,9 @@ export type Database = {
           id?: string
           location?: string | null
           regulation?: string | null
+          regulation_highlight?: string | null
           severity: string
+          submission_highlight?: string | null
           suggestion?: string | null
           title: string
         }
@@ -47,7 +51,9 @@ export type Database = {
           id?: string
           location?: string | null
           regulation?: string | null
+          regulation_highlight?: string | null
           severity?: string
+          submission_highlight?: string | null
           suggestion?: string | null
           title?: string
         }

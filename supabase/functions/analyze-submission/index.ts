@@ -18,6 +18,8 @@ interface AnalysisIssue {
   location?: string;
   suggestion?: string;
   regulation?: string;
+  submission_highlight?: string;
+  regulation_highlight?: string;
 }
 
 Deno.serve(async (req) => {
@@ -100,9 +102,13 @@ Analyze the submission for compliance with the regulations. For each issue found
 5. Location (section or part of submission)
 6. Suggestion (how to fix)
 7. Regulation (which regulation is violated)
+8. submission_highlight (exact quoted text from submission that shows the issue - keep it under 200 characters)
+9. regulation_highlight (exact quoted text from regulation that serves as the basis - keep it under 200 characters)
+
+IMPORTANT: For highlights, extract the EXACT relevant text from the documents. These will be shown to users as evidence.
 
 Return the analysis as a JSON array of issues. If no issues are found, return an empty array.
-Format: [{"category": "...", "severity": "...", "title": "...", "description": "...", "location": "...", "suggestion": "...", "regulation": "..."}]`;
+Format: [{"category": "...", "severity": "...", "title": "...", "description": "...", "location": "...", "suggestion": "...", "regulation": "...", "submission_highlight": "...", "regulation_highlight": "..."}]`;
 
     const analysisResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
       method: 'POST',
@@ -178,6 +184,8 @@ Format: [{"category": "...", "severity": "...", "title": "...", "description": "
         location: issue.location || null,
         suggestion: issue.suggestion || null,
         regulation: issue.regulation || null,
+        submission_highlight: issue.submission_highlight || null,
+        regulation_highlight: issue.regulation_highlight || null,
       }));
 
       const { error: issuesError } = await supabase

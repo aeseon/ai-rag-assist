@@ -14,6 +14,8 @@ interface AnalysisIssue {
   location?: string;
   suggestion?: string;
   regulation?: string;
+  submission_highlight?: string;
+  regulation_highlight?: string;
 }
 
 interface AnalysisResultsProps {
@@ -50,6 +52,8 @@ const AnalysisResults = ({ submissionId }: AnalysisResultsProps) => {
           location: issue.location || undefined,
           suggestion: issue.suggestion || undefined,
           regulation: issue.regulation || undefined,
+          submission_highlight: issue.submission_highlight || undefined,
+          regulation_highlight: issue.regulation_highlight || undefined,
         }));
         setIssues(mappedIssues);
       }
@@ -184,6 +188,31 @@ const AnalysisResults = ({ submissionId }: AnalysisResultsProps) => {
                       <div>
                         <h4 className="text-sm font-semibold text-foreground mb-1">위치</h4>
                         <p className="text-sm text-muted-foreground bg-muted/50 px-3 py-2 rounded-md border-l-2 border-primary">{issue.location}</p>
+                      </div>
+                    )}
+                    
+                    {/* 하이라이트 섹션 */}
+                    {(issue.submission_highlight || issue.regulation_highlight) && (
+                      <div className="space-y-3 mt-4 pt-4 border-t">
+                        <h4 className="text-sm font-bold text-foreground">📌 중요 내용 하이라이트</h4>
+                        
+                        {issue.submission_highlight && (
+                          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                            <h5 className="text-xs font-semibold text-yellow-800 mb-2">📄 제출 문서에서 발췌</h5>
+                            <p className="text-sm text-gray-700 leading-relaxed italic pl-4 border-l-4 border-yellow-400">
+                              "{issue.submission_highlight}"
+                            </p>
+                          </div>
+                        )}
+                        
+                        {issue.regulation_highlight && (
+                          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                            <h5 className="text-xs font-semibold text-blue-800 mb-2">📋 관련 규정에서 발췌</h5>
+                            <p className="text-sm text-gray-700 leading-relaxed italic pl-4 border-l-4 border-blue-400">
+                              "{issue.regulation_highlight}"
+                            </p>
+                          </div>
+                        )}
                       </div>
                     )}
                     

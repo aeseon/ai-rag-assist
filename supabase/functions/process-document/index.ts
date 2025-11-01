@@ -1,5 +1,5 @@
-import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import { pdfText } from "jsr:@pdf/pdftext@1.3.2";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -38,65 +38,35 @@ Deno.serve(async (req) => {
       throw new Error(`Failed to download file: ${downloadError?.message}`);
     }
 
-    // Convert blob to base64 for AI processing
+    // Read PDF bytes
     const arrayBuffer = await fileData.arrayBuffer();
     const bytes = new Uint8Array(arrayBuffer);
-    const base64 = btoa(String.fromCharCode(...bytes));
 
-    console.log('Extracting text from PDF...');
+    console.log('Extracting text from PDF with pdfText...');
 
-    // Extract text using AI
-    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
-    if (!LOVABLE_API_KEY) {
-      throw new Error('LOVABLE_API_KEY not configured');
+    // Extract text using pdf.js via @pdf/pdftext (no AI needed)
+    const pages = await pdfText(bytes);
+    const extractedText = Object.keys(pages)
+      .map((k) => Number(k))
+      .sort((a, b) => a - b)
+      .map((n) => pages[n] || '')
+      .join('\n\n');
+
+    if (!extractedText || extractedText.trim().length === 0) {
+      throw new Error('No text could be extracted from the PDF');
     }
-
-    const extractResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${LOVABLE_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'google/gemini-2.5-flash',
-        messages: [
-          {
-            role: 'system',
-            content: 'Extract all text content from this PDF document. Return the text in a structured format, preserving sections and headings.'
-          },
-          {
-            role: 'user',
-            content: [
-              {
-                type: 'text',
-                text: 'Please extract all text from this document.'
-              },
-              {
-                type: 'image_url',
-                image_url: {
-                  url: `data:application/pdf;base64,${base64}`
-                }
-              }
-            ]
-          }
-        ],
-      }),
-    });
-
-    if (!extractResponse.ok) {
-      const errorText = await extractResponse.text();
-      console.error('AI extraction error:', extractResponse.status, errorText);
-      throw new Error(`AI extraction failed: ${extractResponse.status}`);
-    }
-
-    const extractResult = await extractResponse.json();
-    const extractedText = extractResult.choices[0].message.content;
 
     console.log('Text extracted, chunking document...');
 
     // Chunk the document (split into ~500 word chunks)
     const chunks = chunkText(extractedText, 500);
     console.log(`Created ${chunks.length} chunks`);
+
+    // Prepare AI embeddings key
+    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
+    if (!LOVABLE_API_KEY) {
+      throw new Error('LOVABLE_API_KEY not configured');
+    }
 
     // Generate embeddings for each chunk
     console.log('Generating embeddings...');

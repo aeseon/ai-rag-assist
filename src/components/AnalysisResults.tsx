@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { AlertTriangle, CheckCircle, XCircle, FileText, Loader2 } from "lucide-react";
+import { AlertTriangle, CheckCircle, XCircle, FileText, Loader2, BookOpen, Lightbulb } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
@@ -183,19 +183,38 @@ const AnalysisResults = ({ submissionId }: AnalysisResultsProps) => {
                     {issue.location && (
                       <div>
                         <h4 className="text-sm font-semibold text-foreground mb-1">위치</h4>
-                        <p className="text-sm text-muted-foreground">{issue.location}</p>
+                        <p className="text-sm text-muted-foreground bg-muted/50 px-3 py-2 rounded-md border-l-2 border-primary">{issue.location}</p>
                       </div>
                     )}
-                    {issue.suggestion && (
-                      <div>
-                        <h4 className="text-sm font-semibold text-foreground mb-1">수정 제안</h4>
-                        <p className="text-sm text-muted-foreground">{issue.suggestion}</p>
-                      </div>
-                    )}
-                    {issue.regulation && (
-                      <div>
-                        <h4 className="text-sm font-semibold text-foreground mb-1">관련 규정</h4>
-                        <p className="text-sm text-primary">{issue.regulation}</p>
+                    
+                    {/* 근거 및 수정 제안 섹션 */}
+                    {(issue.regulation || issue.suggestion) && (
+                      <div className="space-y-3 mt-4 pt-4 border-t">
+                        <h4 className="text-sm font-bold text-foreground">근거 및 수정 제안</h4>
+                        
+                        {issue.regulation && (
+                          <div className="bg-primary/5 border border-primary/20 rounded-lg p-4">
+                            <div className="flex items-start gap-2 mb-2">
+                              <BookOpen className="w-4 h-4 text-primary mt-0.5 flex-shrink-0" />
+                              <h5 className="text-sm font-semibold text-primary">관련 법령 및 규정 근거</h5>
+                            </div>
+                            <p className="text-sm text-foreground leading-relaxed pl-6 bg-background/50 p-3 rounded border-l-4 border-primary">
+                              {issue.regulation}
+                            </p>
+                          </div>
+                        )}
+                        
+                        {issue.suggestion && (
+                          <div className="bg-accent/5 border border-accent/20 rounded-lg p-4">
+                            <div className="flex items-start gap-2 mb-2">
+                              <Lightbulb className="w-4 h-4 text-accent mt-0.5 flex-shrink-0" />
+                              <h5 className="text-sm font-semibold text-accent">수정 제안</h5>
+                            </div>
+                            <p className="text-sm text-foreground leading-relaxed pl-6 bg-background/50 p-3 rounded border-l-4 border-accent">
+                              {issue.suggestion}
+                            </p>
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>

@@ -42,8 +42,22 @@ Deno.serve(async (req) => {
       .eq('submission_id', submissionId)
       .order('chunk_index');
 
-    if (chunksError || !submissionChunks || submissionChunks.length === 0) {
-      throw new Error('Failed to retrieve submission chunks');
+    if (chunksError) {
+      console.error('Database error fetching chunks:', chunksError);
+      throw new Error(`Database error: ${chunksError.message}`);
+    }
+
+    if (!submissionChunks || submissionChunks.length === 0) {
+      console.error('No chunks found for submission:', submissionId);
+      // Check if submission exists
+      const { data: submission } = await supabase
+        .from('submissions')
+        .select('id, status')
+        .eq('id', submissionId)
+        .single();
+      
+      console.log('Submission status:', submission);
+      throw new Error(`No submission chunks found. The document may still be processing or failed to process.`);
     }
 
     console.log(`Retrieved ${submissionChunks.length} submission chunks`);

@@ -43,31 +43,39 @@ Deno.serve(async (req) => {
     const arrayBuffer = await fileData.arrayBuffer();
     const bytes = new Uint8Array(arrayBuffer);
 
-    console.log('Extracting text from PDF with pdfText...');
+    console.log('Extracting text from PDF...');
 
-    // Extract text using pdf.js via @pdf/pdftext (no AI needed)
-    const pages = await pdfText(bytes);
-    const extractedText = Object.keys(pages)
-      .map((k) => Number(k))
-      .sort((a, b) => a - b)
-      .map((n) => pages[n] || '')
-      .join('\n\n');
+    // Extract text using @pdf/pdftext
+    let extractedText = '';
+    try {
+      const pages = await pdfText(bytes);
+      extractedText = Object.keys(pages)
+        .map((k) => Number(k))
+        .sort((a, b) => a - b)
+        .map((n) => pages[n] || '')
+        .join('\n\n');
+      
+      console.log(`Extracted text from ${Object.keys(pages).length} pages, ${extractedText.length} characters`);
+    } catch (pdfError) {
+      console.error('PDF extraction error:', pdfError);
+      throw new Error(`Failed to extract text from PDF: ${pdfError instanceof Error ? pdfError.message : 'Unknown error'}`);
+    }
 
     if (!extractedText || extractedText.trim().length === 0) {
       throw new Error('No text could be extracted from the PDF');
     }
 
-    console.log('Text extracted, chunking document...');
-
-    // Chunk the document (split into ~500 word chunks)
-    const chunks = chunkText(extractedText, 500);
-    console.log(`Created ${chunks.length} chunks`);
-
-    // Prepare AI embeddings key
+    // Prepare AI key for embeddings
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
     if (!LOVABLE_API_KEY) {
       throw new Error('LOVABLE_API_KEY not configured');
     }
+
+    console.log('Text extracted successfully, chunking document...');
+
+    // Chunk the document (split into ~500 word chunks)
+    const chunks = chunkText(extractedText, 500);
+    console.log(`Created ${chunks.length} chunks`);
 
     // Generate embeddings for each chunk
     console.log('Generating embeddings...');

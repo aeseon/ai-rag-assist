@@ -16,6 +16,12 @@ interface AnalysisIssue {
   regulation?: string;
   submission_highlight?: string;
   regulation_highlight?: string;
+  regulation_id?: string;
+  regulation_title?: string;
+  regulation_category?: string;
+  regulation_version?: string;
+  regulation_effective_date?: string;
+  regulation_status?: string;
 }
 
 interface AnalysisResultsProps {
@@ -54,6 +60,12 @@ const AnalysisResults = ({ submissionId }: AnalysisResultsProps) => {
           regulation: issue.regulation || undefined,
           submission_highlight: issue.submission_highlight || undefined,
           regulation_highlight: issue.regulation_highlight || undefined,
+          regulation_id: issue.regulation_id || undefined,
+          regulation_title: issue.regulation_title || undefined,
+          regulation_category: issue.regulation_category || undefined,
+          regulation_version: issue.regulation_version || undefined,
+          regulation_effective_date: issue.regulation_effective_date || undefined,
+          regulation_status: issue.regulation_status || undefined,
         }));
         setIssues(mappedIssues);
       }
@@ -197,22 +209,64 @@ const AnalysisResults = ({ submissionId }: AnalysisResultsProps) => {
                         <h4 className="text-sm font-bold text-foreground">📌 중요 내용 하이라이트</h4>
                         
                         {issue.submission_highlight && (
-                          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-                            <h5 className="text-xs font-semibold text-yellow-800 mb-2">📄 제출 문서에서 발췌</h5>
-                            <p className="text-sm text-gray-700 leading-relaxed italic pl-4 border-l-4 border-yellow-400">
+                          <div className="bg-yellow-50 dark:bg-yellow-950/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4">
+                            <h5 className="text-xs font-semibold text-yellow-800 dark:text-yellow-300 mb-2">📄 제출 문서에서 발췌</h5>
+                            <p className="text-sm text-yellow-900 dark:text-yellow-100 leading-relaxed italic pl-4 border-l-4 border-yellow-400">
                               "{issue.submission_highlight}"
                             </p>
                           </div>
                         )}
                         
                         {issue.regulation_highlight && (
-                          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                            <h5 className="text-xs font-semibold text-blue-800 mb-2">📋 관련 규정에서 발췌</h5>
-                            <p className="text-sm text-gray-700 leading-relaxed italic pl-4 border-l-4 border-blue-400">
+                          <div className="bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+                            <h5 className="text-xs font-semibold text-blue-800 dark:text-blue-300 mb-2">📋 관련 규정에서 발췌</h5>
+                            <p className="text-sm text-blue-900 dark:text-blue-100 leading-relaxed italic pl-4 border-l-4 border-blue-400">
                               "{issue.regulation_highlight}"
                             </p>
                           </div>
                         )}
+                      </div>
+                    )}
+
+                    {/* 관련 법령 정보 섹션 */}
+                    {issue.regulation_title && (
+                      <div className="mt-4 pt-4 border-t bg-muted/30 rounded-lg p-4">
+                        <h4 className="text-sm font-bold text-foreground mb-3 flex items-center gap-2">
+                          <BookOpen className="h-4 w-4" />
+                          관련 법령 정보
+                        </h4>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+                          <div className="flex flex-col">
+                            <span className="text-xs text-muted-foreground mb-1">제목</span>
+                            <span className="font-medium text-foreground">{issue.regulation_title}</span>
+                          </div>
+                          <div className="flex flex-col">
+                            <span className="text-xs text-muted-foreground mb-1">카테고리</span>
+                            <span className="text-foreground">{issue.regulation_category}</span>
+                          </div>
+                          {issue.regulation_version && (
+                            <div className="flex flex-col">
+                              <span className="text-xs text-muted-foreground mb-1">버전</span>
+                              <span className="text-foreground">{issue.regulation_version}</span>
+                            </div>
+                          )}
+                          {issue.regulation_effective_date && (
+                            <div className="flex flex-col">
+                              <span className="text-xs text-muted-foreground mb-1">시행일</span>
+                              <span className="text-foreground">
+                                {new Date(issue.regulation_effective_date).toLocaleDateString('ko-KR')}
+                              </span>
+                            </div>
+                          )}
+                          {issue.regulation_status && (
+                            <div className="flex flex-col">
+                              <span className="text-xs text-muted-foreground mb-1">상태</span>
+                              <Badge variant={issue.regulation_status === 'active' ? 'default' : 'secondary'} className="w-fit">
+                                {issue.regulation_status === 'active' ? '유효' : issue.regulation_status}
+                              </Badge>
+                            </div>
+                          )}
+                        </div>
                       </div>
                     )}
                     

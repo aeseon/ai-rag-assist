@@ -20,6 +20,12 @@ interface AnalysisIssue {
   regulation?: string;
   submission_highlight?: string;
   regulation_highlight?: string;
+  regulation_id?: string;
+  regulation_title?: string;
+  regulation_category?: string;
+  regulation_version?: string;
+  regulation_effective_date?: string;
+  regulation_status?: string;
 }
 
 Deno.serve(async (req) => {
@@ -66,17 +72,52 @@ Deno.serve(async (req) => {
     // Combine all submission chunks into full text
     const submissionText = submissionChunks.map(c => c.content).join('\n\n');
 
-    // Get all regulation chunks
+    // Get all regulation chunks with metadata
     const { data: regulationChunks, error: regError } = await supabase
       .from('regulation_chunks')
-      .select('content')
+      .select(`
+        content,
+        chunk_index,
+        regulation_id,
+        regulations (
+          id,
+          title,
+          category,
+          version,
+          effective_date,
+          status
+        )
+      `)
       .order('chunk_index');
 
     if (regError || !regulationChunks || regulationChunks.length === 0) {
       console.log('No regulation data found, proceeding with general analysis');
     }
 
-    const regulationText = regulationChunks?.map(c => c.content).join('\n\n') || 'No regulation data available.';
+    // Build regulation text with metadata
+    const regulationsByIdMap = new Map();
+    const regulationTextParts: string[] = [];
+    
+    regulationChunks?.forEach(chunk => {
+      const reg = (chunk as any).regulations;
+      if (reg && !regulationsByIdMap.has(reg.id)) {
+        regulationsByIdMap.set(reg.id, reg);
+        regulationTextParts.push(
+          `\n[규정 ID: ${reg.id}]\n` +
+          `제목: ${reg.title}\n` +
+          `카테고리: ${reg.category}\n` +
+          `버전: ${reg.version || 'N/A'}\n` +
+          `시행일: ${reg.effective_date || 'N/A'}\n` +
+          `상태: ${reg.status}\n` +
+          `--- 내용 시작 ---`
+        );
+      }
+      regulationTextParts.push(chunk.content);
+    });
+
+    const regulationText = regulationTextParts.length > 0 
+      ? regulationTextParts.join('\n\n') 
+      : 'No regulation data available.';
 
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
     if (!LOVABLE_API_KEY) {
@@ -104,11 +145,18 @@ Analyze the submission for compliance with the regulations. For each issue found
 7. Regulation (which regulation is violated)
 8. submission_highlight (exact quoted text from submission that shows the issue - keep it under 200 characters)
 9. regulation_highlight (exact quoted text from regulation that serves as the basis - keep it under 200 characters)
+10. regulation_id (the regulation ID from [규정 ID: ...] that this issue is based on)
+11. regulation_title (the regulation title)
+12. regulation_category (the regulation category)
+13. regulation_version (the regulation version)
+14. regulation_effective_date (the regulation effective date)
+15. regulation_status (the regulation status)
 
 IMPORTANT: For highlights, extract the EXACT relevant text from the documents. These will be shown to users as evidence.
+CRITICAL: Always include the regulation metadata (regulation_id, regulation_title, etc.) by matching the regulation content to the metadata provided in [규정 ID: ...] sections.
 
 Return the analysis as a JSON array of issues. If no issues are found, return an empty array.
-Format: [{"category": "...", "severity": "...", "title": "...", "description": "...", "location": "...", "suggestion": "...", "regulation": "...", "submission_highlight": "...", "regulation_highlight": "..."}]`;
+Format: [{"category": "...", "severity": "...", "title": "...", "description": "...", "location": "...", "suggestion": "...", "regulation": "...", "submission_highlight": "...", "regulation_highlight": "...", "regulation_id": "...", "regulation_title": "...", "regulation_category": "...", "regulation_version": "...", "regulation_effective_date": "...", "regulation_status": "..."}]`;
 
     const analysisResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
       method: 'POST',
@@ -186,6 +234,12 @@ Format: [{"category": "...", "severity": "...", "title": "...", "description": "
         regulation: issue.regulation || null,
         submission_highlight: issue.submission_highlight || null,
         regulation_highlight: issue.regulation_highlight || null,
+        regulation_id: issue.regulation_id || null,
+        regulation_title: issue.regulation_title || null,
+        regulation_category: issue.regulation_category || null,
+        regulation_version: issue.regulation_version || null,
+        regulation_effective_date: issue.regulation_effective_date || null,
+        regulation_status: issue.regulation_status || null,
       }));
 
       const { error: issuesError } = await supabase

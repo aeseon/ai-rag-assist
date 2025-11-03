@@ -52,12 +52,18 @@ Deno.serve(async (req) => {
     const visibleSpans = latin1.match(/[ -~]{4,}/g) || [];
     let extractedText = visibleSpans.join(' ').replace(/\s+/g, ' ').trim();
 
+    let hasTextContent = true;
+    let noTextReason = '';
+
     if (!extractedText || extractedText.length < 50) {
       // Fallback placeholder to keep pipeline moving
-      extractedText = `Document ${filePath} could not be parsed reliably. Please verify the original PDF content.`;
+      hasTextContent = false;
+      noTextReason = 'PDF 파일에 텍스트가 포함되어 있지 않습니다. 이미지 기반 PDF이거나 스캔된 문서일 수 있습니다. 텍스트가 포함된 PDF로 다시 제출하거나, 문서 제출 요건에 따라 원본 텍스트 파일을 함께 제출해 주세요.';
+      extractedText = `[텍스트 없음] ${filePath} - 대체 근거: 의료기기 허가 신고 시 제출 서류는 텍스트 형식으로 제출되어야 하며, 검토 가능한 형태여야 합니다.`;
+      console.warn('PDF contains no extractable text');
     }
 
-    console.log(`Extracted ~${extractedText.length} characters (lightweight mode)`);
+    console.log(`Extracted ~${extractedText.length} characters (lightweight mode). Has text: ${hasTextContent}`);
 
     // Chunk the document (split into ~500 word chunks) for storage
     const chunks = chunkText(extractedText, 500);
@@ -83,7 +89,7 @@ Deno.serve(async (req) => {
     } else {
       const chunksToInsert = chunks.map((content, index) => ({
         submission_id: submissionId,
-        content,
+        content: hasTextContent ? content : `${content}\n\n[진단 사유: ${noTextReason}]`,
         embedding: null, // No embeddings
         chunk_index: index,
       }));

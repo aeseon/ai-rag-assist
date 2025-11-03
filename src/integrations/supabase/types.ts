@@ -20,10 +20,18 @@ export type Database = {
           category: string
           created_at: string | null
           description: string
+          has_text_content: boolean | null
           id: string
           location: string | null
+          no_text_reason: string | null
           regulation: string | null
+          regulation_category: string | null
+          regulation_effective_date: string | null
           regulation_highlight: string | null
+          regulation_id: string | null
+          regulation_status: string | null
+          regulation_title: string | null
+          regulation_version: string | null
           severity: string
           submission_highlight: string | null
           suggestion: string | null
@@ -34,10 +42,18 @@ export type Database = {
           category: string
           created_at?: string | null
           description: string
+          has_text_content?: boolean | null
           id?: string
           location?: string | null
+          no_text_reason?: string | null
           regulation?: string | null
+          regulation_category?: string | null
+          regulation_effective_date?: string | null
           regulation_highlight?: string | null
+          regulation_id?: string | null
+          regulation_status?: string | null
+          regulation_title?: string | null
+          regulation_version?: string | null
           severity: string
           submission_highlight?: string | null
           suggestion?: string | null
@@ -48,10 +64,18 @@ export type Database = {
           category?: string
           created_at?: string | null
           description?: string
+          has_text_content?: boolean | null
           id?: string
           location?: string | null
+          no_text_reason?: string | null
           regulation?: string | null
+          regulation_category?: string | null
+          regulation_effective_date?: string | null
           regulation_highlight?: string | null
+          regulation_id?: string | null
+          regulation_status?: string | null
+          regulation_title?: string | null
+          regulation_version?: string | null
           severity?: string
           submission_highlight?: string | null
           suggestion?: string | null
@@ -63,6 +87,13 @@ export type Database = {
             columns: ["analysis_result_id"]
             isOneToOne: false
             referencedRelation: "analysis_results"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "analysis_issues_regulation_id_fkey"
+            columns: ["regulation_id"]
+            isOneToOne: false
+            referencedRelation: "regulations"
             referencedColumns: ["id"]
           },
         ]

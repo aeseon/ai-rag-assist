@@ -171,6 +171,34 @@ const AnalysisResults = ({ submissionId }: AnalysisResultsProps) => {
         </div>
       </Card>
 
+      {/* 규정 근거 요약 (반려 시) */}
+      {overallStatus === 'non_compliant' && issues.length > 0 && (
+        <Card className="p-6 bg-destructive/5 border-destructive/20">
+          <h3 className="text-lg font-semibold text-destructive mb-3 flex items-center gap-2">
+            <BookOpen className="h-5 w-5" />
+            규정 근거 요약
+          </h3>
+          <p className="text-sm text-muted-foreground mb-4">
+            본 판정은 아래 규정 근거에 기반합니다.
+          </p>
+          <div className="space-y-2">
+            {issues
+              .filter(i => i.severity === 'error' && i.regulation_title)
+              .map((issue, idx) => (
+                <div key={issue.id} className="flex items-start gap-2 text-sm bg-background/50 p-3 rounded-lg border">
+                  <span className="font-semibold text-destructive min-w-[20px]">{idx + 1}.</span>
+                  <div className="flex-1">
+                    <p className="font-medium text-foreground mb-1">{issue.regulation_title}</p>
+                    {issue.regulation && (
+                      <p className="text-muted-foreground text-xs">{issue.regulation}</p>
+                    )}
+                  </div>
+                </div>
+              ))}
+          </div>
+        </Card>
+      )}
+
       {/* 세부 검토 결과 */}
       {issues.length > 0 && (
         <Card className="p-6">
@@ -230,74 +258,68 @@ const AnalysisResults = ({ submissionId }: AnalysisResultsProps) => {
 
                     {/* 관련 법령 정보 섹션 */}
                     {issue.regulation_title && (
-                      <div className="mt-4 pt-4 border-t bg-muted/30 rounded-lg p-4">
-                        <h4 className="text-sm font-bold text-foreground mb-3 flex items-center gap-2">
+                      <div className="mt-4 pt-4 border-t bg-primary/5 rounded-lg p-4 border-l-4 border-primary">
+                        <h4 className="text-sm font-bold text-primary mb-3 flex items-center gap-2">
                           <BookOpen className="h-4 w-4" />
-                          관련 법령 정보
+                          📋 적용 규정 근거
                         </h4>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
-                          <div className="flex flex-col">
-                            <span className="text-xs text-muted-foreground mb-1">제목</span>
-                            <span className="font-medium text-foreground">{issue.regulation_title}</span>
+                        <div className="space-y-3 mb-3">
+                          <div className="bg-background/80 p-3 rounded-md">
+                            <span className="text-xs font-semibold text-muted-foreground block mb-1">규정 제목</span>
+                            <span className="font-semibold text-foreground text-base">{issue.regulation_title}</span>
                           </div>
-                          <div className="flex flex-col">
-                            <span className="text-xs text-muted-foreground mb-1">카테고리</span>
-                            <span className="text-foreground">{issue.regulation_category}</span>
+                          <div className="grid grid-cols-2 gap-2">
+                            <div className="bg-background/80 p-2 rounded-md">
+                              <span className="text-xs text-muted-foreground block mb-1">카테고리</span>
+                              <Badge variant="outline" className="w-fit">{issue.regulation_category}</Badge>
+                            </div>
+                            {issue.regulation_version && (
+                              <div className="bg-background/80 p-2 rounded-md">
+                                <span className="text-xs text-muted-foreground block mb-1">버전</span>
+                                <span className="text-sm text-foreground">{issue.regulation_version}</span>
+                              </div>
+                            )}
+                            {issue.regulation_effective_date && (
+                              <div className="bg-background/80 p-2 rounded-md">
+                                <span className="text-xs text-muted-foreground block mb-1">시행일</span>
+                                <span className="text-sm text-foreground">
+                                  {new Date(issue.regulation_effective_date).toLocaleDateString('ko-KR')}
+                                </span>
+                              </div>
+                            )}
+                            {issue.regulation_status && (
+                              <div className="bg-background/80 p-2 rounded-md">
+                                <span className="text-xs text-muted-foreground block mb-1">상태</span>
+                                <Badge variant={issue.regulation_status === 'active' ? 'default' : 'secondary'} className="w-fit">
+                                  {issue.regulation_status === 'active' ? '유효' : issue.regulation_status}
+                                </Badge>
+                              </div>
+                            )}
                           </div>
-                          {issue.regulation_version && (
-                            <div className="flex flex-col">
-                              <span className="text-xs text-muted-foreground mb-1">버전</span>
-                              <span className="text-foreground">{issue.regulation_version}</span>
-                            </div>
-                          )}
-                          {issue.regulation_effective_date && (
-                            <div className="flex flex-col">
-                              <span className="text-xs text-muted-foreground mb-1">시행일</span>
-                              <span className="text-foreground">
-                                {new Date(issue.regulation_effective_date).toLocaleDateString('ko-KR')}
-                              </span>
-                            </div>
-                          )}
-                          {issue.regulation_status && (
-                            <div className="flex flex-col">
-                              <span className="text-xs text-muted-foreground mb-1">상태</span>
-                              <Badge variant={issue.regulation_status === 'active' ? 'default' : 'secondary'} className="w-fit">
-                                {issue.regulation_status === 'active' ? '유효' : issue.regulation_status}
-                              </Badge>
-                            </div>
-                          )}
                         </div>
+                        {issue.regulation && (
+                          <div className="bg-background/80 p-3 rounded-md border-l-2 border-primary">
+                            <span className="text-xs font-semibold text-muted-foreground block mb-2">해당 조항 내용</span>
+                            <p className="text-sm text-foreground leading-relaxed">{issue.regulation}</p>
+                          </div>
+                        )}
                       </div>
                     )}
                     
-                    {/* 근거 및 수정 제안 섹션 */}
-                    {(issue.regulation || issue.suggestion) && (
-                      <div className="space-y-3 mt-4 pt-4 border-t">
-                        <h4 className="text-sm font-bold text-foreground">근거 및 수정 제안</h4>
-                        
-                        {issue.regulation && (
-                          <div className="bg-primary/5 border border-primary/20 rounded-lg p-4">
-                            <div className="flex items-start gap-2 mb-2">
-                              <BookOpen className="w-4 h-4 text-primary mt-0.5 flex-shrink-0" />
-                              <h5 className="text-sm font-semibold text-primary">관련 법령 및 규정 근거</h5>
-                            </div>
-                            <p className="text-sm text-foreground leading-relaxed pl-6 bg-background/50 p-3 rounded border-l-4 border-primary">
-                              {issue.regulation}
-                            </p>
+                    {/* 수정 제안 섹션 */}
+                    {issue.suggestion && (
+                      <div className="mt-4 pt-4 border-t">
+                        <div className="bg-accent/10 border border-accent/30 rounded-lg p-4">
+                          <div className="flex items-start gap-2 mb-3">
+                            <Lightbulb className="w-5 h-5 text-accent mt-0.5 flex-shrink-0" />
+                            <h4 className="text-sm font-bold text-accent">💡 개선 방법 및 예시</h4>
                           </div>
-                        )}
-                        
-                        {issue.suggestion && (
-                          <div className="bg-accent/5 border border-accent/20 rounded-lg p-4">
-                            <div className="flex items-start gap-2 mb-2">
-                              <Lightbulb className="w-4 h-4 text-accent mt-0.5 flex-shrink-0" />
-                              <h5 className="text-sm font-semibold text-accent">수정 제안</h5>
-                            </div>
-                            <p className="text-sm text-foreground leading-relaxed pl-6 bg-background/50 p-3 rounded border-l-4 border-accent">
+                          <div className="bg-background/80 p-3 rounded-md border-l-4 border-accent">
+                            <p className="text-sm text-foreground leading-relaxed whitespace-pre-wrap">
                               {issue.suggestion}
                             </p>
                           </div>
-                        )}
+                        </div>
                       </div>
                     )}
                   </div>

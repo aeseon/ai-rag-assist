@@ -238,7 +238,7 @@ Format: [{"category": "...", "severity": "...", "title": "...", "description": "
         regulation_title: issue.regulation_title || null,
         regulation_category: issue.regulation_category || null,
         regulation_version: issue.regulation_version || null,
-        regulation_effective_date: issue.regulation_effective_date || null,
+        regulation_effective_date: (issue.regulation_effective_date && issue.regulation_effective_date !== 'N/A') ? issue.regulation_effective_date : null,
         regulation_status: issue.regulation_status || null,
       }));
 

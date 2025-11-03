@@ -47,6 +47,7 @@ const Admin = () => {
     effectiveDate: "",
   });
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
+  const [isProcessing, setIsProcessing] = useState(false);
   const { toast } = useToast();
   const { user } = useAuth();
 
@@ -127,10 +128,41 @@ const Admin = () => {
 
       if (dbError) throw dbError;
 
+      // Get the inserted regulation ID
+      const { data: insertedReg, error: fetchError } = await supabase
+        .from("regulations")
+        .select("id")
+        .eq("file_path", filePath)
+        .single();
+
+      if (fetchError || !insertedReg) {
+        console.error("Failed to fetch regulation ID:", fetchError);
+        throw new Error("규정은 업로드되었지만 처리에 실패했습니다.");
+      }
+
       toast({
         title: "업로드 성공",
-        description: "규정 문서가 성공적으로 등록되었습니다.",
+        description: "규정 문서를 처리하는 중입니다...",
       });
+
+      // Process the regulation document
+      const { error: processError } = await supabase.functions.invoke('process-regulation', {
+        body: { regulationId: insertedReg.id }
+      });
+
+      if (processError) {
+        console.error("Processing error:", processError);
+        toast({
+          title: "처리 경고",
+          description: "규정이 등록되었지만 문서 처리 중 오류가 발생했습니다. 나중에 다시 시도해주세요.",
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "등록 완료",
+          description: "규정 문서가 성공적으로 등록되고 처리되었습니다.",
+        });
+      }
 
       setIsDialogOpen(false);
       setFormData({ title: "", description: "", category: "", version: "", effectiveDate: "" });
@@ -157,6 +189,12 @@ const Admin = () => {
 
   const handleDelete = async (id: string, filePath: string) => {
     if (!confirm("이 규정 문서를 삭제하시겠습니까?")) return;
+
+    // Delete chunks first
+    await supabase
+      .from('regulation_chunks')
+      .delete()
+      .eq('regulation_id', id);
 
     const { error: storageError } = await supabase.storage
       .from("regulations")
@@ -191,6 +229,40 @@ const Admin = () => {
     }
   };
 
+  const handleReprocessAll = async () => {
+    if (!confirm("모든 규정 문서를 다시 처리하시겠습니까? (시간이 걸릴 수 있습니다)")) return;
+
+    setIsProcessing(true);
+    let successCount = 0;
+    let failCount = 0;
+
+    for (const regulation of regulations) {
+      try {
+        const { error } = await supabase.functions.invoke('process-regulation', {
+          body: { regulationId: regulation.id }
+        });
+
+        if (error) {
+          console.error(`Failed to process ${regulation.title}:`, error);
+          failCount++;
+        } else {
+          successCount++;
+        }
+      } catch (error) {
+        console.error(`Error processing ${regulation.title}:`, error);
+        failCount++;
+      }
+    }
+
+    setIsProcessing(false);
+
+    toast({
+      title: "재처리 완료",
+      description: `성공: ${successCount}개, 실패: ${failCount}개`,
+      variant: failCount > 0 ? "destructive" : "default",
+    });
+  };
+
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
@@ -215,18 +287,28 @@ const Admin = () => {
 
       {/* Main Content */}
       <main className="container mx-auto px-4 py-8">
-        <div className="max-w-6xl mx-auto">
+          <div className="max-w-6xl mx-auto">
           <div className="flex justify-between items-center mb-6">
             <h2 className="text-xl font-semibold text-foreground">
               등록된 규정 문서 ({regulations.length})
             </h2>
-            <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-              <DialogTrigger asChild>
-                <Button className="bg-gradient-primary">
-                  <Plus className="w-4 h-4 mr-2" />
-                  규정 문서 추가
+            <div className="flex gap-2">
+              {regulations.length > 0 && (
+                <Button 
+                  onClick={handleReprocessAll} 
+                  variant="outline"
+                  disabled={isProcessing}
+                >
+                  {isProcessing ? "처리 중..." : "모든 규정 재처리"}
                 </Button>
-              </DialogTrigger>
+              )}
+              <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+                <DialogTrigger asChild>
+                  <Button className="bg-gradient-primary">
+                    <Plus className="w-4 h-4 mr-2" />
+                    규정 문서 추가
+                  </Button>
+                </DialogTrigger>
               <DialogContent className="max-w-2xl">
                 <DialogHeader>
                   <DialogTitle>새 규정 문서 등록</DialogTitle>
@@ -315,7 +397,8 @@ const Admin = () => {
                   <Button onClick={handleSubmit}>등록</Button>
                 </DialogFooter>
               </DialogContent>
-            </Dialog>
+              </Dialog>
+            </div>
           </div>
 
           <Card>

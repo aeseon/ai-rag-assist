@@ -171,32 +171,150 @@ const AnalysisResults = ({ submissionId }: AnalysisResultsProps) => {
         </div>
       </Card>
 
-      {/* 규정 근거 요약 (반려 시) */}
+      {/* 반려 상세 정보 (반려 시) */}
       {overallStatus === 'non_compliant' && issues.length > 0 && (
-        <Card className="p-6 bg-destructive/5 border-destructive/20">
-          <h3 className="text-lg font-semibold text-destructive mb-3 flex items-center gap-2">
-            <BookOpen className="h-5 w-5" />
-            규정 근거 요약
-          </h3>
-          <p className="text-sm text-muted-foreground mb-4">
-            본 판정은 아래 규정 근거에 기반합니다.
-          </p>
-          <div className="space-y-2">
-            {issues
-              .filter(i => i.severity === 'error' && i.regulation_title)
-              .map((issue, idx) => (
-                <div key={issue.id} className="flex items-start gap-2 text-sm bg-background/50 p-3 rounded-lg border">
-                  <span className="font-semibold text-destructive min-w-[20px]">{idx + 1}.</span>
-                  <div className="flex-1">
-                    <p className="font-medium text-foreground mb-1">{issue.regulation_title}</p>
-                    {issue.regulation && (
-                      <p className="text-muted-foreground text-xs">{issue.regulation}</p>
-                    )}
+        <div className="space-y-4">
+          {/* 규정 근거 요약 */}
+          <Card className="p-6 bg-destructive/5 border-destructive/20">
+            <h3 className="text-lg font-semibold text-destructive mb-3 flex items-center gap-2">
+              <BookOpen className="h-5 w-5" />
+              규정 근거 요약
+            </h3>
+            <p className="text-sm text-muted-foreground mb-4">
+              본 판정은 아래 규정 근거에 기반합니다.
+            </p>
+            <div className="space-y-2">
+              {issues
+                .filter(i => i.severity === 'error' && i.regulation_title)
+                .map((issue, idx) => (
+                  <div key={issue.id} className="flex items-start gap-2 text-sm bg-background/50 p-3 rounded-lg border">
+                    <span className="font-semibold text-destructive min-w-[20px]">{idx + 1}.</span>
+                    <div className="flex-1">
+                      <p className="font-medium text-foreground mb-1">{issue.regulation_title}</p>
+                      {issue.regulation && (
+                        <p className="text-muted-foreground text-xs">{issue.regulation}</p>
+                      )}
+                    </div>
+                  </div>
+                ))}
+            </div>
+          </Card>
+
+          {/* 검토된 문서 중요 내용 하이라이트 */}
+          {issues.some(i => i.severity === 'error' && i.submission_highlight) && (
+            <Card className="p-6 bg-yellow-50/50 dark:bg-yellow-950/10 border-yellow-200 dark:border-yellow-800">
+              <h3 className="text-lg font-semibold text-yellow-800 dark:text-yellow-300 mb-3 flex items-center gap-2">
+                <FileText className="h-5 w-5" />
+                검토된 문서에서 중요한 내용
+              </h3>
+              <p className="text-sm text-muted-foreground mb-4">
+                제출하신 문서에서 규정 위반이 발견된 부분을 하이라이트하여 제시합니다.
+              </p>
+              <div className="space-y-3">
+                {issues
+                  .filter(i => i.severity === 'error' && i.submission_highlight)
+                  .map((issue, idx) => (
+                    <div key={issue.id} className="bg-background border border-yellow-300 dark:border-yellow-700 rounded-lg p-4">
+                      <div className="flex items-start gap-2 mb-2">
+                        <span className="font-semibold text-yellow-800 dark:text-yellow-300 min-w-[20px]">{idx + 1}.</span>
+                        <p className="text-sm font-medium text-foreground">{issue.title}</p>
+                      </div>
+                      <div className="pl-6">
+                        <div className="bg-yellow-100 dark:bg-yellow-900/30 border-l-4 border-yellow-500 p-3 rounded-r">
+                          <p className="text-sm text-yellow-900 dark:text-yellow-100 italic">
+                            "{issue.submission_highlight}"
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+              </div>
+            </Card>
+          )}
+
+          {/* 관련 법령 및 규정 근거 하이라이트 */}
+          {issues.some(i => i.severity === 'error' && i.regulation_highlight) && (
+            <Card className="p-6 bg-blue-50/50 dark:bg-blue-950/10 border-blue-200 dark:border-blue-800">
+              <h3 className="text-lg font-semibold text-blue-800 dark:text-blue-300 mb-3 flex items-center gap-2">
+                <BookOpen className="h-5 w-5" />
+                관련 법령 및 규정에서의 근거
+              </h3>
+              <p className="text-sm text-muted-foreground mb-4">
+                위반된 규정의 구체적인 조항 내용을 하이라이트하여 제시합니다.
+              </p>
+              <div className="space-y-3">
+                {issues
+                  .filter(i => i.severity === 'error' && i.regulation_highlight)
+                  .map((issue, idx) => (
+                    <div key={issue.id} className="bg-background border border-blue-300 dark:border-blue-700 rounded-lg p-4">
+                      <div className="flex items-start gap-2 mb-2">
+                        <span className="font-semibold text-blue-800 dark:text-blue-300 min-w-[20px]">{idx + 1}.</span>
+                        <div className="flex-1">
+                          <p className="text-sm font-medium text-foreground mb-1">{issue.regulation_title}</p>
+                          {issue.regulation_category && (
+                            <Badge variant="outline" className="text-xs">{issue.regulation_category}</Badge>
+                          )}
+                        </div>
+                      </div>
+                      <div className="pl-6">
+                        <div className="bg-blue-100 dark:bg-blue-900/30 border-l-4 border-blue-500 p-3 rounded-r">
+                          <p className="text-sm text-blue-900 dark:text-blue-100 italic">
+                            "{issue.regulation_highlight}"
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+              </div>
+            </Card>
+          )}
+
+          {/* 수정 제안 및 결과 판정 */}
+          {issues.some(i => i.severity === 'error' && i.suggestion) && (
+            <Card className="p-6 bg-accent/5 border-accent/30">
+              <h3 className="text-lg font-semibold text-accent mb-3 flex items-center gap-2">
+                <Lightbulb className="h-5 w-5" />
+                수정 제안 및 결과 판정
+              </h3>
+              <p className="text-sm text-muted-foreground mb-4">
+                문서의 규정 위반 여부를 판별하고, 수정이 필요한 항목에 대한 구체적인 제안을 제공합니다.
+              </p>
+              <div className="bg-accent/10 border border-accent/30 rounded-lg p-4 mb-4">
+                <div className="flex items-start gap-3">
+                  <XCircle className="w-6 h-6 text-destructive flex-shrink-0 mt-1" />
+                  <div>
+                    <h4 className="font-semibold text-foreground mb-2">판정 결과: 반려</h4>
+                    <p className="text-sm text-muted-foreground">
+                      제출하신 문서에서 규정과 불일치하거나 오류가 발견되어 <strong className="text-destructive">반려 및 보완</strong>이 필요합니다.
+                      아래의 수정 제안을 참고하여 문서를 보완한 후 재제출해 주시기 바랍니다.
+                    </p>
                   </div>
                 </div>
-              ))}
-          </div>
-        </Card>
+              </div>
+              <div className="space-y-3">
+                {issues
+                  .filter(i => i.severity === 'error' && i.suggestion)
+                  .map((issue, idx) => (
+                    <div key={issue.id} className="bg-background border rounded-lg p-4">
+                      <div className="flex items-start gap-2 mb-3">
+                        <span className="font-semibold text-accent min-w-[20px]">{idx + 1}.</span>
+                        <div className="flex-1">
+                          <p className="font-medium text-foreground mb-1">{issue.title}</p>
+                          <p className="text-sm text-muted-foreground mb-2">{issue.description}</p>
+                        </div>
+                      </div>
+                      <div className="pl-6 bg-accent/10 border-l-4 border-accent p-3 rounded-r">
+                        <h5 className="text-xs font-semibold text-accent mb-2">💡 수정 방법</h5>
+                        <p className="text-sm text-foreground leading-relaxed whitespace-pre-wrap">
+                          {issue.suggestion}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+              </div>
+            </Card>
+          )}
+        </div>
       )}
 
       {/* 세부 검토 결과 */}

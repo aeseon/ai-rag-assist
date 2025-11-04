@@ -28,6 +28,226 @@ interface AnalysisIssue {
   regulation_status?: string;
 }
 
+interface RuleIssue {
+  rule: string;
+  severity: 'high' | 'medium' | 'low';
+  msg: string;
+  suggest: string;
+}
+
+// Rule-based filtering functions
+function ruleSterileConflict(text: string): RuleIssue[] {
+  const issues: RuleIssue[] = [];
+  if (!text) return issues;
+  
+  const hasSterile = /멸균/.test(text);
+  const hasNonSterile = /비멸균|무멸균/.test(text);
+  
+  if (hasSterile && hasNonSterile) {
+    issues.push({
+      rule: "의료기기법 시행규칙 제28조(제조허가 등)",
+      severity: "high",
+      msg: "작용원리에 멸균/비멸균 문구가 혼재되어 있습니다. 실제 공급상태와 일치하도록 단일화 필요.",
+      suggest: "작용원리·라벨·IFU에서 '멸균' 또는 '비멸균' 하나로 통일하여 표기하고 관련 문구를 일괄 정정하세요."
+    });
+  }
+  
+  return issues;
+}
+
+function ruleUnits(text: string): RuleIssue[] {
+  const issues: RuleIssue[] = [];
+  if (!text) return issues;
+  
+  const headerMm = /단위\s*[:：]?\s*mm/i.test(text);
+  const hasCmOrM = /\d+(\.\d+)?\s*(cm|㎝|m(?!m))/.test(text);
+  
+  if (headerMm && hasCmOrM) {
+    issues.push({
+      rule: "의료기기 기술문서 등의 심사에 관한 규정 별표1",
+      severity: "medium",
+      msg: "치수 표 상단은 mm로 표기되어 있으나 본문 값에 cm/m가 혼용되어 있습니다.",
+      suggest: "모든 치수를 mm로 환산하여 통일 기재하세요. 예) 2.5 cm → 25 mm, 1.8 m → 1800 mm."
+    });
+  }
+  
+  return issues;
+}
+
+function ruleMaterials(materialText: string, warningsText: string = ""): RuleIssue[] {
+  const issues: RuleIssue[] = [];
+  if (!materialText) return issues;
+  
+  // Latex allergy warning
+  const hasLatex = /latex|라텍스|rubber\s*latex/i.test(materialText);
+  if (hasLatex) {
+    const warnHasLatex = /알레르기|라텍스/i.test(warningsText);
+    if (!warnHasLatex) {
+      issues.push({
+        rule: "의료기기 사용설명서 작성 및 심사에 관한 규정 제5조",
+        severity: "high",
+        msg: "원재료에 천연고무 라텍스가 포함되었으나 알레르기 주의 문구가 누락되었습니다.",
+        suggest: "주의사항에 '본 제품에는 천연고무 라텍스가 포함되어 민감자에게 알레르기 반응을 유발할 수 있음'을 추가하세요."
+      });
+    }
+  }
+  
+  // Menthol CAS number
+  if (/menthol|멘솔/i.test(materialText)) {
+    const hasCasLine = /CAS\s*번호.*\d/.test(materialText);
+    if (!hasCasLine) {
+      issues.push({
+        rule: "의료기기 기술문서 등의 심사에 관한 규정 제6조",
+        severity: "medium",
+        msg: "Menthol 기재는 있으나 CAS 번호가 누락되었을 가능성이 있습니다.",
+        suggest: "Menthol CAS 번호(예: 89-78-1 등)를 확인하여 원재료 표에 기재하세요."
+      });
+    }
+  }
+  
+  // Percentage sum check
+  const percentages = Array.from(materialText.matchAll(/(\d{1,3}(?:\.\d+)?)\s*%/g))
+    .map(m => parseFloat(m[1]));
+  if (percentages.length > 0) {
+    const sum = percentages.reduce((a, b) => a + b, 0);
+    if (sum < 99.5 || sum > 100.5) {
+      issues.push({
+        rule: "의료기기 기술문서 등의 심사에 관한 규정 별표1",
+        severity: "medium",
+        msg: `원재료(%) 합계가 100%와 불일치할 가능성(${sum.toFixed(1)}%)이 있습니다.`,
+        suggest: "함량 합계를 재검토하여 100%가 되도록 조정·정정하세요(중복/중첩 기재 여부 확인)."
+      });
+    }
+  }
+  
+  // Contact information
+  const hasContact = /접촉|피부|인체접촉/.test(materialText);
+  if (!hasContact) {
+    issues.push({
+      rule: "의료기기 기술문서 등의 심사에 관한 규정 별표1",
+      severity: "low",
+      msg: "원재료 표의 접촉부위/인체접촉 여부 기재가 미흡합니다.",
+      suggest: "각 원재료의 인체 접촉 여부 및 접촉 부위를 비고란에 명확히 기재하세요."
+    });
+  }
+  
+  // Generic name for brand names
+  const brandPattern = /(벨크로|밸크로|Velcro|3M\s*\d{3,4})/gi;
+  const brandMatches = Array.from(materialText.matchAll(brandPattern));
+  for (const match of brandMatches) {
+    const start = match.index || 0;
+    const window = materialText.substring(start, start + 200);
+    const hasGeneric = /(일반명|화학명|CAS\s*번호)/i.test(window);
+    if (!hasGeneric) {
+      issues.push({
+        rule: "의료기기 기술문서 등의 심사에 관한 규정 제6조",
+        severity: "medium",
+        msg: `상표/제품명('${match[0]}')이 기재되었으나 인접 구간에 원재료명(일반명/화학명) 또는 CAS 번호가 확인되지 않습니다.`,
+        suggest: "상표/제품명과 함께 원재료명(일반명/화학명) 및 CAS 번호를 명확히 기재하세요. 예: Nylon(Polyamide), CAS 25038-54-4."
+      });
+    }
+  }
+  
+  // Additive purpose
+  const needsPurpose = /(pigment|dye|색소|Titanium\s*Dioxide)/i.test(materialText);
+  const hasPurpose = /(착색제|자외선차단제|안정화제|유화제|분산제|보존제|가교제|가소제|개시제|윤활제|촉매제|항산화제)/.test(materialText);
+  if (needsPurpose && !hasPurpose) {
+    issues.push({
+      rule: "의료기기 기술문서 등의 심사에 관한 규정 별표1",
+      severity: "medium",
+      msg: "첨가제/색소 항목의 비고란에 첨가목적(예: 착색제, 자외선차단제 등) 기재가 누락되었습니다.",
+      suggest: "해당 원재료 행 비고란에 첨가목적을 명시하세요."
+    });
+  }
+  
+  // Completeness checks
+  const hasGenericName = /(일반명|화학명|CAS\s*[:\s]*\d{2,})/i.test(materialText);
+  if (!hasGenericName) {
+    issues.push({
+      rule: "의료기기 기술문서 등의 심사에 관한 규정 제6조",
+      severity: "medium",
+      msg: "원재료명 또는 성분명란에 일반명/화학명/CAS 기재가 불충분합니다.",
+      suggest: "예: 일반명 Nylon / 화학명 Polyamide / CAS 25038-54-4 형태로 기재하세요."
+    });
+  }
+  
+  const hasSpec = /(KS|ASTM|ISO)\s*[\w\-\.]+/i.test(materialText) || /자사규격/.test(materialText);
+  if (!hasSpec) {
+    issues.push({
+      rule: "의료기기 기술문서 등의 심사에 관한 규정 별표1",
+      severity: "medium",
+      msg: "규격란에 KS/ASTM/ISO 등 공인 규격 또는 자사규격 기재가 필요합니다.",
+      suggest: "관련 규격이 없으면 '자사규격'을, 있으면 KS/ASTM/ISO 규격번호를 기재하세요."
+    });
+  }
+  
+  return issues;
+}
+
+function ruleInstructions(text: string): RuleIssue[] {
+  const issues: RuleIssue[] = [];
+  if (!text) return issues;
+  
+  const confirmCount = (text.match(/확인/g) || []).length;
+  if (confirmCount >= 3) {
+    issues.push({
+      rule: "의료기기 사용설명서 작성 및 심사에 관한 규정 제4조",
+      severity: "low",
+      msg: "사용 전 준비/확인 문구가 중복되어 간결성이 떨어질 수 있습니다.",
+      suggest: "중복되는 '확인' 중심 문장을 통합해 간결화하세요. (예: 포장/손상/청결 확인을 1개 항목으로 통합)"
+    });
+  }
+  
+  const hasSingleUse = /일회용|재사용\s*금지/.test(text);
+  if (!hasSingleUse) {
+    issues.push({
+      rule: "의료기기 사용설명서 작성 및 심사에 관한 규정 제5조",
+      severity: "medium",
+      msg: "일회용/재사용 금지 원칙이 명확히 기재되어야 합니다.",
+      suggest: "'본 제품은 일회용으로 재사용하지 않습니다(재사용 금지).' 문구를 명확히 기재하세요."
+    });
+  }
+  
+  return issues;
+}
+
+function runRuleBasedFiltering(submissionText: string): AnalysisIssue[] {
+  const ruleIssues: RuleIssue[] = [];
+  
+  // Run all rule checks
+  ruleIssues.push(...ruleSterileConflict(submissionText));
+  ruleIssues.push(...ruleUnits(submissionText));
+  ruleIssues.push(...ruleMaterials(submissionText, submissionText));
+  ruleIssues.push(...ruleInstructions(submissionText));
+  
+  // Convert rule issues to analysis issues
+  return ruleIssues.map(issue => {
+    const severityMap: Record<string, 'error' | 'warning' | 'info'> = {
+      high: 'error',
+      medium: 'warning',
+      low: 'info'
+    };
+    
+    return {
+      category: "규정 준수",
+      severity: severityMap[issue.severity] || 'warning',
+      title: issue.msg,
+      description: `${issue.msg}\n\n${issue.suggest}`,
+      location: "문서 전체",
+      suggestion: issue.suggest,
+      regulation: issue.rule,
+      submission_highlight: undefined,
+      regulation_highlight: issue.rule,
+      regulation_id: undefined,
+      regulation_title: issue.rule,
+      regulation_category: "의료기기법 및 하위 규정",
+      regulation_version: undefined,
+      regulation_effective_date: undefined,
+      regulation_status: "active"
+    };
+  });
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -124,9 +344,15 @@ Deno.serve(async (req) => {
       throw new Error('LOVABLE_API_KEY not configured');
     }
 
+    console.log('Running rule-based filtering...');
+    
+    // Step 1: Rule-based filtering
+    const ruleBasedIssues = runRuleBasedFiltering(submissionText);
+    console.log(`Rule-based filtering found ${ruleBasedIssues.length} issues`);
+
     console.log('Analyzing submission with AI...');
 
-    // Use AI to compare submission with regulations directly
+    // Step 2: Use AI to compare submission with regulations directly
     const analysisPrompt = `You are a medical device regulation compliance expert. Analyze the following medical device submission content against relevant regulations and identify any compliance issues.
 
 Submission Content:
@@ -190,17 +416,21 @@ Format: [{"category": "...", "severity": "...", "title": "...", "description": "
 
     // Extract JSON from response
     const jsonMatch = analysisText.match(/\[[\s\S]*\]/);
-    let allIssues: AnalysisIssue[] = [];
+    let aiIssues: AnalysisIssue[] = [];
     
     if (jsonMatch) {
       try {
-        allIssues = JSON.parse(jsonMatch[0]) as AnalysisIssue[];
+        aiIssues = JSON.parse(jsonMatch[0]) as AnalysisIssue[];
       } catch (parseError) {
         console.error('Failed to parse AI response:', parseError);
       }
     }
 
-    console.log(`Analysis complete. Found ${allIssues.length} issues`);
+    console.log(`AI analysis found ${aiIssues.length} issues`);
+    
+    // Combine rule-based and AI-based issues
+    const allIssues = [...ruleBasedIssues, ...aiIssues];
+    console.log(`Total issues found: ${allIssues.length} (${ruleBasedIssues.length} from rules, ${aiIssues.length} from AI)`);
 
     // Determine overall status
     const hasErrors = allIssues.some(issue => issue.severity === 'error');

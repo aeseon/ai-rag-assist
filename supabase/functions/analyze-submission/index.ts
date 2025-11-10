@@ -211,6 +211,23 @@ function ruleInstructions(text: string): RuleIssue[] {
   return issues;
 }
 
+function ruleProhibitedTerms(text: string): RuleIssue[] {
+  const issues: RuleIssue[] = [];
+  if (!text) return issues;
+  
+  // Check for prohibited term '보호대'
+  if (text.includes('보호대')) {
+    issues.push({
+      rule: "의료기기법 시행규칙 제45조 별표 7 제1호~10호",
+      severity: "high",
+      msg: "신고서류 외형 파일에서 사용 불가 단어 '보호대'가 존재하는 것으로 확인됩니다.",
+      suggest: "명칭 내 사용 불가 단어가 포함되어 있습니다. 의료기기법 시행규칙 제45조(별표 7 제1호~10호)를 확인하시고, 사용 불가 단어를 제거하신 후 제출하시기 바랍니다."
+    });
+  }
+  
+  return issues;
+}
+
 function runRuleBasedFiltering(submissionText: string): AnalysisIssue[] {
   const ruleIssues: RuleIssue[] = [];
   
@@ -219,6 +236,7 @@ function runRuleBasedFiltering(submissionText: string): AnalysisIssue[] {
   ruleIssues.push(...ruleUnits(submissionText));
   ruleIssues.push(...ruleMaterials(submissionText, submissionText));
   ruleIssues.push(...ruleInstructions(submissionText));
+  ruleIssues.push(...ruleProhibitedTerms(submissionText));
   
   // Convert rule issues to analysis issues
   return ruleIssues.map(issue => {

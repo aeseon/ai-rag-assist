@@ -192,7 +192,7 @@ const AnalysisResults = ({ submissionId }: AnalysisResultsProps) => {
       {/* 반려 상세 정보 (반려 시) */}
       {overallStatus === 'non_compliant' && issues.length > 0 && (
         <div className="space-y-4">
-          {/* 규정 근거 요약 */}
+          {/* 규정 근거 요약 - 항상 표시 */}
           <Card className="p-6 bg-destructive/5 border-destructive/20">
             <h3 className="text-lg font-semibold text-destructive mb-3 flex items-center gap-2">
               <BookOpen className="h-5 w-5" />
@@ -203,14 +203,19 @@ const AnalysisResults = ({ submissionId }: AnalysisResultsProps) => {
             </p>
             <div className="space-y-2">
               {issues
-                .filter(i => i.severity === 'error' && i.regulation_title)
+                .filter(i => i.severity === 'error')
                 .map((issue, idx) => (
                   <div key={issue.id} className="flex items-start gap-2 text-sm bg-background/50 p-3 rounded-lg border">
                     <span className="font-semibold text-destructive min-w-[20px]">{idx + 1}.</span>
                     <div className="flex-1">
-                      <p className="font-medium text-foreground mb-1">{issue.regulation_title}</p>
+                      <p className="font-medium text-foreground mb-1">
+                        {issue.regulation_title || issue.title}
+                      </p>
                       {issue.regulation && (
                         <p className="text-muted-foreground text-xs">{issue.regulation}</p>
+                      )}
+                      {!issue.regulation && issue.description && (
+                        <p className="text-muted-foreground text-xs">{issue.description}</p>
                       )}
                     </div>
                   </div>
@@ -250,16 +255,16 @@ const AnalysisResults = ({ submissionId }: AnalysisResultsProps) => {
             </Card>
           )}
 
-          {/* 관련 법령 및 규정 근거 하이라이트 */}
-          {issues.some(i => i.severity === 'error' && i.regulation_highlight) && (
-            <Card className="p-6 bg-blue-50/50 dark:bg-blue-950/10 border-blue-200 dark:border-blue-800">
-              <h3 className="text-lg font-semibold text-blue-800 dark:text-blue-300 mb-3 flex items-center gap-2">
-                <BookOpen className="h-5 w-5" />
-                관련 법령 및 규정에서의 근거
-              </h3>
-              <p className="text-sm text-muted-foreground mb-4">
-                위반된 규정의 구체적인 조항 내용을 하이라이트하여 제시합니다.
-              </p>
+          {/* 관련 법령 및 규정 근거 하이라이트 - 오류 항목이 있으면 항상 표시 */}
+          <Card className="p-6 bg-blue-50/50 dark:bg-blue-950/10 border-blue-200 dark:border-blue-800">
+            <h3 className="text-lg font-semibold text-blue-800 dark:text-blue-300 mb-3 flex items-center gap-2">
+              <BookOpen className="h-5 w-5" />
+              관련 법령 및 규정에서의 근거
+            </h3>
+            <p className="text-sm text-muted-foreground mb-4">
+              위반된 규정의 구체적인 조항 내용을 하이라이트하여 제시합니다.
+            </p>
+            {issues.some(i => i.severity === 'error' && i.regulation_highlight) ? (
               <div className="space-y-3">
                 {issues
                   .filter(i => i.severity === 'error' && i.regulation_highlight)
@@ -268,7 +273,7 @@ const AnalysisResults = ({ submissionId }: AnalysisResultsProps) => {
                       <div className="flex items-start gap-2 mb-2">
                         <span className="font-semibold text-blue-800 dark:text-blue-300 min-w-[20px]">{idx + 1}.</span>
                         <div className="flex-1">
-                          <p className="text-sm font-medium text-foreground mb-1">{issue.regulation_title}</p>
+                          <p className="text-sm font-medium text-foreground mb-1">{issue.regulation_title || issue.title}</p>
                           {issue.regulation_category && (
                             <Badge variant="outline" className="text-xs">{issue.regulation_category}</Badge>
                           )}
@@ -284,8 +289,41 @@ const AnalysisResults = ({ submissionId }: AnalysisResultsProps) => {
                     </div>
                   ))}
               </div>
-            </Card>
-          )}
+            ) : (
+              <div className="space-y-3">
+                {issues
+                  .filter(i => i.severity === 'error')
+                  .map((issue, idx) => (
+                    <div key={issue.id} className="bg-background border border-blue-300 dark:border-blue-700 rounded-lg p-4">
+                      <div className="flex items-start gap-2 mb-2">
+                        <span className="font-semibold text-blue-800 dark:text-blue-300 min-w-[20px]">{idx + 1}.</span>
+                        <div className="flex-1">
+                          <p className="text-sm font-medium text-foreground mb-1">{issue.regulation_title || issue.title}</p>
+                          {issue.regulation_category && (
+                            <Badge variant="outline" className="text-xs">{issue.regulation_category}</Badge>
+                          )}
+                        </div>
+                      </div>
+                      <div className="pl-6">
+                        {issue.regulation ? (
+                          <div className="bg-blue-100 dark:bg-blue-900/30 border-l-4 border-blue-500 p-3 rounded-r">
+                            <p className="text-sm text-blue-900 dark:text-blue-100">
+                              {issue.regulation}
+                            </p>
+                          </div>
+                        ) : (
+                          <div className="bg-muted/50 border-l-4 border-blue-300 p-3 rounded-r">
+                            <p className="text-sm text-muted-foreground italic">
+                              {issue.description || "규정 근거 정보를 수집하는 중입니다."}
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+              </div>
+            )}
+          </Card>
 
           {/* 수정 제안 및 결과 판정 */}
           {issues.some(i => i.severity === 'error' && i.suggestion) && (

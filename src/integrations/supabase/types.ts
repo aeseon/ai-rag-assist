@@ -18,12 +18,15 @@ export type Database = {
         Row: {
           analysis_result_id: string | null
           category: string
+          citations: Json | null
           created_at: string | null
           description: string
           has_text_content: boolean | null
           id: string
+          issue_code: string | null
           location: string | null
           no_text_reason: string | null
+          notes: string | null
           regulation: string | null
           regulation_category: string | null
           regulation_effective_date: string | null
@@ -40,12 +43,15 @@ export type Database = {
         Insert: {
           analysis_result_id?: string | null
           category: string
+          citations?: Json | null
           created_at?: string | null
           description: string
           has_text_content?: boolean | null
           id?: string
+          issue_code?: string | null
           location?: string | null
           no_text_reason?: string | null
+          notes?: string | null
           regulation?: string | null
           regulation_category?: string | null
           regulation_effective_date?: string | null
@@ -62,12 +68,15 @@ export type Database = {
         Update: {
           analysis_result_id?: string | null
           category?: string
+          citations?: Json | null
           created_at?: string | null
           description?: string
           has_text_content?: boolean | null
           id?: string
+          issue_code?: string | null
           location?: string | null
           no_text_reason?: string | null
+          notes?: string | null
           regulation?: string | null
           regulation_category?: string | null
           regulation_effective_date?: string | null

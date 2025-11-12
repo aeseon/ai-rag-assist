@@ -561,6 +561,10 @@ If no issues are found, return empty array: []`;
         regulation_version: issue.regulation_version || null,
         regulation_effective_date: (issue.regulation_effective_date && issue.regulation_effective_date !== 'N/A') ? issue.regulation_effective_date : null,
         regulation_status: issue.regulation_status || null,
+        // RAG-specific fields
+        citations: issue.citations || null,
+        issue_code: issue.issue_code || null,
+        notes: issue.notes || null,
       }));
 
       const { error: issuesError } = await supabase

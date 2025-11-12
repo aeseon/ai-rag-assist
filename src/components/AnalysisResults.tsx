@@ -5,6 +5,18 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 
+interface Citation {
+  doc_id: string;
+  title: string;
+  category: string;
+  version?: string;
+  effective_date?: string;
+  status: string;
+  section_path?: string;
+  snippet: string;
+  score?: number;
+}
+
 interface AnalysisIssue {
   id: string;
   category: string;
@@ -22,6 +34,9 @@ interface AnalysisIssue {
   regulation_version?: string;
   regulation_effective_date?: string;
   regulation_status?: string;
+  citations?: Citation[];
+  issue_code?: string;
+  notes?: string;
 }
 
 interface AnalysisResultsProps {
@@ -66,6 +81,9 @@ const AnalysisResults = ({ submissionId }: AnalysisResultsProps) => {
           regulation_version: issue.regulation_version || undefined,
           regulation_effective_date: issue.regulation_effective_date || undefined,
           regulation_status: issue.regulation_status || undefined,
+          citations: issue.citations || undefined,
+          issue_code: issue.issue_code || undefined,
+          notes: issue.notes || undefined,
         }));
         setIssues(mappedIssues);
       }
@@ -437,6 +455,98 @@ const AnalysisResults = ({ submissionId }: AnalysisResultsProps) => {
                               {issue.suggestion}
                             </p>
                           </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* RAG Citations 섹션 */}
+                    {issue.citations && issue.citations.length > 0 && (
+                      <div className="mt-4 pt-4 border-t">
+                        <h4 className="text-sm font-bold text-foreground mb-3 flex items-center gap-2">
+                          <BookOpen className="h-4 w-4" />
+                          📚 상세 규정 참조 (RAG Citations)
+                        </h4>
+                        <p className="text-xs text-muted-foreground mb-3">
+                          AI가 검색한 관련 규정 근거들입니다. 관련도 점수가 높을수록 직접적으로 연관됩니다.
+                        </p>
+                        <div className="space-y-3">
+                          {issue.citations.map((citation, idx) => (
+                            <div 
+                              key={idx}
+                              className="bg-gradient-to-r from-primary/5 to-primary/10 border border-primary/20 rounded-lg p-4"
+                            >
+                              <div className="flex items-start justify-between mb-2">
+                                <div className="flex-1">
+                                  <div className="flex items-center gap-2 mb-1">
+                                    <Badge variant="outline" className="text-xs">
+                                      {citation.category}
+                                    </Badge>
+                                    {citation.score && (
+                                      <Badge 
+                                        variant={citation.score >= 0.8 ? "default" : "secondary"}
+                                        className="text-xs"
+                                      >
+                                        관련도: {(citation.score * 100).toFixed(0)}%
+                                      </Badge>
+                                    )}
+                                  </div>
+                                  <h5 className="font-semibold text-foreground text-sm">{citation.title}</h5>
+                                </div>
+                              </div>
+                              
+                              {citation.section_path && (
+                                <div className="mb-2 bg-background/60 px-2 py-1 rounded border border-primary/10">
+                                  <span className="text-xs text-muted-foreground">조항 경로: </span>
+                                  <span className="text-xs font-medium text-foreground">{citation.section_path}</span>
+                                </div>
+                              )}
+                              
+                              <div className="bg-background/80 border-l-4 border-primary p-3 rounded-r mb-2">
+                                <p className="text-sm text-foreground leading-relaxed italic">
+                                  "{citation.snippet}"
+                                </p>
+                              </div>
+                              
+                              <div className="grid grid-cols-3 gap-2 text-xs">
+                                {citation.version && (
+                                  <div>
+                                    <span className="text-muted-foreground">버전: </span>
+                                    <span className="text-foreground">{citation.version}</span>
+                                  </div>
+                                )}
+                                {citation.effective_date && (
+                                  <div>
+                                    <span className="text-muted-foreground">시행일: </span>
+                                    <span className="text-foreground">
+                                      {new Date(citation.effective_date).toLocaleDateString('ko-KR', { 
+                                        year: 'numeric', 
+                                        month: '2-digit', 
+                                        day: '2-digit' 
+                                      })}
+                                    </span>
+                                  </div>
+                                )}
+                                {citation.status && (
+                                  <div>
+                                    <span className="text-muted-foreground">상태: </span>
+                                    <Badge variant={citation.status === 'active' || citation.status === '활성' ? 'default' : 'secondary'} className="text-xs">
+                                      {citation.status === 'active' ? '활성' : citation.status}
+                                    </Badge>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Notes 섹션 */}
+                    {issue.notes && (
+                      <div className="mt-4 pt-4 border-t">
+                        <div className="bg-muted/50 border rounded-lg p-3">
+                          <h4 className="text-xs font-semibold text-muted-foreground mb-2">📝 추가 참고사항</h4>
+                          <p className="text-sm text-foreground">{issue.notes}</p>
                         </div>
                       </div>
                     )}

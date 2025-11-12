@@ -332,6 +332,106 @@ const AnalysisResults = ({ submissionId }: AnalysisResultsProps) => {
               </div>
             </Card>
           )}
+
+          {/* RAG 상세 근거 및 출처 (반려 시) */}
+          {issues.some(i => i.severity === 'error' && i.citations && i.citations.length > 0) && (
+            <Card className="p-6 bg-primary/5 border-primary/30">
+              <h3 className="text-lg font-semibold text-primary mb-3 flex items-center gap-2">
+                <BookOpen className="h-5 w-5" />
+                관련 근거 및 보완사항 상세
+              </h3>
+              <p className="text-sm text-muted-foreground mb-4">
+                AI가 검색한 법령/규정의 상세 근거와 보완이 필요한 사항을 제시합니다. 관련도 점수가 높을수록 직접적으로 연관됩니다.
+              </p>
+              <div className="space-y-4">
+                {issues
+                  .filter(i => i.severity === 'error' && i.citations && i.citations.length > 0)
+                  .map((issue, issueIdx) => (
+                    <div key={issue.id} className="bg-background border border-primary/20 rounded-lg p-4">
+                      <div className="mb-3 pb-3 border-b">
+                        <div className="flex items-start gap-2">
+                          <span className="font-semibold text-primary min-w-[24px]">{issueIdx + 1}.</span>
+                          <div className="flex-1">
+                            <p className="font-semibold text-foreground mb-1">{issue.title}</p>
+                            <Badge variant="destructive" className="text-xs">오류</Badge>
+                          </div>
+                        </div>
+                      </div>
+                      
+                      <div className="pl-6 space-y-3">
+                        {issue.citations!.map((citation, citIdx) => (
+                          <div 
+                            key={citIdx}
+                            className="bg-gradient-to-r from-primary/5 to-primary/10 border border-primary/20 rounded-lg p-3"
+                          >
+                            <div className="flex items-start justify-between mb-2">
+                              <div className="flex-1">
+                                <div className="flex items-center gap-2 mb-1">
+                                  <Badge variant="outline" className="text-xs">
+                                    {citation.category}
+                                  </Badge>
+                                  {citation.score && (
+                                    <Badge 
+                                      variant={citation.score >= 0.8 ? "default" : "secondary"}
+                                      className="text-xs"
+                                    >
+                                      관련도: {(citation.score * 100).toFixed(0)}%
+                                    </Badge>
+                                  )}
+                                </div>
+                                <h5 className="font-semibold text-foreground text-sm">{citation.title}</h5>
+                              </div>
+                            </div>
+                            
+                            {citation.section_path && (
+                              <div className="mb-2 bg-background/60 px-2 py-1 rounded border border-primary/10">
+                                <span className="text-xs text-muted-foreground">조항 경로: </span>
+                                <span className="text-xs font-medium text-foreground">{citation.section_path}</span>
+                              </div>
+                            )}
+                            
+                            <div className="bg-background/80 border-l-4 border-primary p-2 rounded-r mb-2">
+                              <p className="text-sm text-foreground leading-relaxed italic">
+                                "{citation.snippet}"
+                              </p>
+                            </div>
+                            
+                            <div className="grid grid-cols-3 gap-2 text-xs">
+                              {citation.version && (
+                                <div>
+                                  <span className="text-muted-foreground">버전: </span>
+                                  <span className="text-foreground">{citation.version}</span>
+                                </div>
+                              )}
+                              {citation.effective_date && (
+                                <div>
+                                  <span className="text-muted-foreground">시행일: </span>
+                                  <span className="text-foreground">
+                                    {new Date(citation.effective_date).toLocaleDateString('ko-KR', { 
+                                      year: 'numeric', 
+                                      month: '2-digit', 
+                                      day: '2-digit' 
+                                    })}
+                                  </span>
+                                </div>
+                              )}
+                              {citation.status && (
+                                <div>
+                                  <span className="text-muted-foreground">상태: </span>
+                                  <Badge variant={citation.status === 'active' || citation.status === '활성' ? 'default' : 'secondary'} className="text-xs">
+                                    {citation.status === 'active' ? '활성' : citation.status}
+                                  </Badge>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+              </div>
+            </Card>
+          )}
         </div>
       )}
 

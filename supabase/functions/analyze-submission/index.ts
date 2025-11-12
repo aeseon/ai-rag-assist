@@ -10,7 +10,20 @@ interface AnalyzeRequest {
   submissionId: string;
 }
 
+interface Citation {
+  doc_id: string;
+  title: string;
+  category: string;
+  version?: string;
+  effective_date?: string;
+  status: string;
+  section_path?: string;
+  snippet: string;
+  score?: number;
+}
+
 interface AnalysisIssue {
+  issue_code?: string;
   category: string;
   severity: 'error' | 'warning' | 'info';
   title: string;
@@ -26,6 +39,12 @@ interface AnalysisIssue {
   regulation_version?: string;
   regulation_effective_date?: string;
   regulation_status?: string;
+  citations?: Citation[];
+  rule_based_alert?: {
+    message: string;
+    severity: string;
+  };
+  notes?: string;
 }
 
 interface RuleIssue {
@@ -370,37 +389,91 @@ Deno.serve(async (req) => {
 
     console.log('Analyzing submission with AI...');
 
-    // Step 2: Use AI to compare submission with regulations directly
-    const analysisPrompt = `You are a medical device regulation compliance expert. Analyze the following medical device submission content against relevant regulations and identify any compliance issues.
+    // Step 2: Use RAG-enhanced AI analysis to compare submission with regulations
+    const analysisPrompt = `You are a medical device regulation compliance expert with RAG (Retrieval-Augmented Generation) capabilities. 
+
+Your task: Analyze the medical device submission against relevant regulations and generate detailed compliance findings with citations.
 
 Submission Content:
 ${submissionText.substring(0, 15000)} ${submissionText.length > 15000 ? '...(truncated)' : ''}
 
-Relevant Regulations:
-${regulationText.substring(0, 10000)} ${regulationText.length > 10000 ? '...(truncated)' : ''}
+Relevant Regulations Database:
+${regulationText.substring(0, 12000)} ${regulationText.length > 12000 ? '...(truncated)' : ''}
 
-Analyze the submission for compliance with the regulations. For each issue found, provide:
-1. Category (e.g., "Safety Requirements", "Documentation", "Testing", "Labeling")
-2. Severity (error, warning, or info)
-3. Title (brief description)
-4. Description (detailed explanation)
-5. Location (section or part of submission)
-6. Suggestion (how to fix)
-7. Regulation (which regulation is violated)
-8. submission_highlight (exact quoted text from submission that shows the issue - keep it under 200 characters)
-9. regulation_highlight (exact quoted text from regulation that serves as the basis - keep it under 200 characters)
-10. regulation_id (the regulation ID from [규정 ID: ...] that this issue is based on)
-11. regulation_title (the regulation title)
-12. regulation_category (the regulation category)
-13. regulation_version (the regulation version)
-14. regulation_effective_date (the regulation effective date)
-15. regulation_status (the regulation status)
+For EACH compliance issue found, provide a comprehensive analysis with the following structure:
 
-IMPORTANT: For highlights, extract the EXACT relevant text from the documents. These will be shown to users as evidence.
-CRITICAL: Always include the regulation metadata (regulation_id, regulation_title, etc.) by matching the regulation content to the metadata provided in [규정 ID: ...] sections.
+1. **issue_code**: Unique identifier (e.g., "missing_regulatory_data", "sterile_conflict", "unit_mismatch")
+2. **category**: Classification (e.g., "규정 준수", "안전 요건", "문서화", "시험", "표시사항")
+3. **severity**: "error" | "warning" | "info"
+4. **title**: Brief description of the issue
+5. **description**: Detailed explanation (2-3 sentences)
+6. **location**: Specific section/part of submission where issue occurs
+7. **suggestion**: Actionable fix recommendation
+8. **submission_highlight**: EXACT quoted text from submission (max 200 chars) showing the issue
+9. **regulation_highlight**: EXACT quoted text from regulation (max 200 chars) serving as basis
+10. **regulation_id**: The UUID from [규정 ID: ...] markers
+11. **regulation_title**: Title from regulation metadata
+12. **regulation_category**: Category from regulation metadata
+13. **regulation_version**: Version from regulation metadata
+14. **regulation_effective_date**: Effective date from regulation metadata
+15. **regulation_status**: Status from regulation metadata
+16. **citations**: Array of detailed citation objects, each containing:
+    - doc_id: regulation_id
+    - title: regulation title
+    - category: regulation category
+    - version: regulation version
+    - effective_date: effective date
+    - status: regulation status
+    - section_path: specific section/article path (e.g., "제3장 제출서류 요건/제12조")
+    - snippet: relevant excerpt (100-200 characters)
+    - score: relevance score (0.0-1.0, estimate based on how directly it relates)
+17. **notes**: Additional context or special considerations
 
-Return the analysis as a JSON array of issues. If no issues are found, return an empty array.
-Format: [{"category": "...", "severity": "...", "title": "...", "description": "...", "location": "...", "suggestion": "...", "regulation": "...", "submission_highlight": "...", "regulation_highlight": "...", "regulation_id": "...", "regulation_title": "...", "regulation_category": "...", "regulation_version": "...", "regulation_effective_date": "...", "regulation_status": "..."}]`;
+**CRITICAL REQUIREMENTS:**
+- Extract EXACT text for highlights - these are evidence shown to users
+- Match regulation content to [규정 ID: ...] metadata sections
+- Provide multiple citations if multiple regulation sections apply
+- Estimate relevance scores based on directness of relation
+- Include section_path for precise location in regulation documents
+- For text-free PDFs, include notes about text extraction issues
+
+**OUTPUT FORMAT:**
+Return valid JSON array only. No explanatory text before or after.
+[
+  {
+    "issue_code": "...",
+    "category": "...",
+    "severity": "error"|"warning"|"info",
+    "title": "...",
+    "description": "...",
+    "location": "...",
+    "suggestion": "...",
+    "submission_highlight": "...",
+    "regulation_highlight": "...",
+    "regulation_id": "...",
+    "regulation_title": "...",
+    "regulation_category": "...",
+    "regulation_version": "...",
+    "regulation_effective_date": "...",
+    "regulation_status": "...",
+    "citations": [
+      {
+        "doc_id": "...",
+        "title": "...",
+        "category": "...",
+        "version": "...",
+        "effective_date": "...",
+        "status": "...",
+        "section_path": "...",
+        "snippet": "...",
+        "score": 0.85
+      }
+    ],
+    "notes": "..."
+  }
+]
+
+If no issues are found, return empty array: []`;
 
     const analysisResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
       method: 'POST',
@@ -413,7 +486,7 @@ Format: [{"category": "...", "severity": "...", "title": "...", "description": "
         messages: [
           {
             role: 'system',
-            content: 'You are a medical device regulation compliance expert. Analyze submissions and return findings as valid JSON arrays only.'
+            content: 'You are a medical device regulation compliance expert with RAG capabilities. Analyze medical device submissions against regulations and return detailed findings with citations as valid JSON arrays only. Always include exact text highlights and comprehensive citation information with relevance scores.'
           },
           {
             role: 'user',

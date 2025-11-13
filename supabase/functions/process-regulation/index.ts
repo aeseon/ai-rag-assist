@@ -47,66 +47,32 @@ Deno.serve(async (req) => {
 
     console.log('File downloaded, size:', fileData.size);
 
-    // Convert to base64
+    // Lightweight text extraction from PDF bytes (no external AI call)
     const arrayBuffer = await fileData.arrayBuffer();
-    const base64 = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
+    const bytes = new Uint8Array(arrayBuffer);
 
-    // Extract text using Lovable AI
-    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
-    if (!LOVABLE_API_KEY) {
-      throw new Error('LOVABLE_API_KEY not configured');
-    }
+    // 1) Decode bytes as latin1
+    // 2) Collect visible ASCII spans (length >= 4)
+    // 3) Join and normalize whitespace
+    const latin1 = new TextDecoder('latin1').decode(bytes);
+    const visibleSpans = latin1.match(/[ -~]{4,}/g) || [];
+    let extractedText = visibleSpans.join(' ').replace(/\s+/g, ' ').trim();
 
-    console.log('Extracting text from PDF...');
+    let hasTextContent = true as boolean;
+    let noTextReason: string | null = null;
 
-    const extractResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${LOVABLE_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'google/gemini-2.5-flash',
-        messages: [
-          {
-            role: 'user',
-            content: [
-              {
-                type: 'text',
-                text: 'Extract all text content from this PDF document. Return only the extracted text, preserving the structure and formatting as much as possible. If the PDF contains no extractable text, respond with: NO_TEXT_CONTENT'
-              },
-              {
-                type: 'image_url',
-                image_url: {
-                  url: `data:application/pdf;base64,${base64}`
-                }
-              }
-            ]
-          }
-        ],
-      }),
-    });
-
-    if (!extractResponse.ok) {
-      const errorText = await extractResponse.text();
-      console.error('Text extraction failed:', extractResponse.status, errorText);
-      throw new Error(`Text extraction failed: ${extractResponse.status}`);
-    }
-
-    const extractResult = await extractResponse.json();
-    let textContent = extractResult.choices[0].message.content;
-
-    let hasTextContent = true;
-    let noTextReason = null;
-
-    if (textContent.includes('NO_TEXT_CONTENT')) {
+    if (!extractedText || extractedText.length < 50) {
       hasTextContent = false;
       noTextReason = '해당 PDF는 텍스트 정보를 포함하지 않습니다. 이미지 기반 PDF이거나 스캔된 문서일 수 있습니다.';
-      textContent = `[텍스트 없음] ${regulation.title}\n\n${noTextReason}\n\n대체 근거: 본 규정은 ${regulation.category} 카테고리에 속하며, 제출 시 해당 규정의 요구사항을 준수해야 합니다.`;
-      console.log('No text content found in PDF');
+      extractedText = `[텍스트 없음] ${regulation.title}\n\n${noTextReason}\n\n대체 근거: 본 규정은 ${regulation.category} 카테고리에 속하며, 제출 시 해당 규정의 요구사항을 준수해야 합니다.`;
+      console.warn('PDF contains no extractable text');
     }
 
-    console.log('Text extracted, length:', textContent.length);
+    console.log(`Extracted ~${extractedText.length} characters (lightweight). Has text: ${hasTextContent}`);
+
+    // Use extractedText for downstream chunking
+    let textContent = extractedText;
+
 
     // Split into chunks (approx 1000 chars each)
     const chunkSize = 1000;

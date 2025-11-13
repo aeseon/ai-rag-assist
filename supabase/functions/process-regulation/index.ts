@@ -47,7 +47,7 @@ Deno.serve(async (req) => {
 
     console.log('File downloaded, size:', fileData.size);
 
-    // Lightweight text extraction from PDF bytes (no external AI call)
+    // Lightweight text extraction from PDF bytes (with AI OCR fallback)
     const arrayBuffer = await fileData.arrayBuffer();
     const bytes = new Uint8Array(arrayBuffer);
 
@@ -61,6 +61,65 @@ Deno.serve(async (req) => {
     let hasTextContent = true as boolean;
     let noTextReason: string | null = null;
 
+    // Try AI OCR when lightweight pass fails (typical for 한글/비ASCII PDF)
+    if (!extractedText || extractedText.length < 50) {
+      console.warn('ASCII extraction insufficient. Trying AI OCR fallback...');
+      const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
+      if (LOVABLE_API_KEY) {
+        try {
+          const base64 = btoa(String.fromCharCode(...bytes));
+          const resp = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${LOVABLE_API_KEY}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              model: 'google/gemini-2.5-flash',
+              messages: [
+                {
+                  role: 'user',
+                  content: [
+                    {
+                      type: 'text',
+                      text: '이 PDF의 모든 텍스트를 가능한 한 구조와 함께 추출해 주세요. 텍스트가 전혀 없으면 정확히 "NO_TEXT_CONTENT"만 응답하세요.'
+                    },
+                    {
+                      type: 'image_url',
+                      image_url: { url: `data:application/pdf;base64,${base64}` }
+                    }
+                  ]
+                }
+              ]
+            })
+          });
+
+          if (resp.ok) {
+            const out = await resp.json();
+            const aiText = out?.choices?.[0]?.message?.content ?? '';
+            if (aiText && !/NO_TEXT_CONTENT/i.test(aiText) && aiText.trim().length >= 50) {
+              extractedText = aiText.trim();
+              hasTextContent = true;
+              noTextReason = null;
+              console.log(`AI OCR extracted ~${extractedText.length} characters.`);
+            } else {
+              hasTextContent = false;
+            }
+          } else {
+            const errBody = await resp.text();
+            console.error('AI OCR failed:', resp.status, errBody);
+            hasTextContent = false;
+          }
+        } catch (e) {
+          console.error('AI OCR error:', e);
+          hasTextContent = false;
+        }
+      } else {
+        console.warn('LOVABLE_API_KEY not configured; skipping AI OCR.');
+        hasTextContent = false;
+      }
+    }
+
     if (!extractedText || extractedText.length < 50) {
       hasTextContent = false;
       noTextReason = '해당 PDF는 텍스트 정보를 포함하지 않습니다. 이미지 기반 PDF이거나 스캔된 문서일 수 있습니다.';
@@ -68,7 +127,7 @@ Deno.serve(async (req) => {
       console.warn('PDF contains no extractable text');
     }
 
-    console.log(`Extracted ~${extractedText.length} characters (lightweight). Has text: ${hasTextContent}`);
+    console.log(`Extracted ~${extractedText.length} characters. Has text: ${hasTextContent}`);
 
     // Use extractedText for downstream chunking
     let textContent = extractedText;

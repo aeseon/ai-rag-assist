@@ -44,7 +44,7 @@ Deno.serve(async (req) => {
 
     console.log('Attempting lightweight text extraction from PDF bytes...');
 
-    // Lightweight ASCII extraction fallback (avoids heavy PDF libs on Edge)
+    // Lightweight ASCII extraction (fast but ASCII-only)
     // 1) Decode bytes as latin1
     // 2) Collect visible ASCII spans (length >= 4)
     // 3) Join and normalize whitespace
@@ -55,15 +55,77 @@ Deno.serve(async (req) => {
     let hasTextContent = true;
     let noTextReason = '';
 
+    // If ASCII pass fails (likely for Korean PDFs), try OCR/text extraction via Lovable AI
     if (!extractedText || extractedText.length < 50) {
-      // Fallback placeholder to keep pipeline moving
+      console.warn('ASCII extraction yielded insufficient text. Trying AI OCR fallback...');
+      const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
+      if (LOVABLE_API_KEY) {
+        try {
+          // Encode full PDF as base64 for the AI gateway
+          const base64 = btoa(String.fromCharCode(...bytes));
+          const extractResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${LOVABLE_API_KEY}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              model: 'google/gemini-2.5-flash',
+              messages: [
+                {
+                  role: 'user',
+                  content: [
+                    {
+                      type: 'text',
+                      text: '다음 PDF에서 모든 텍스트를 가능한 한 구조를 유지하여 추출해 주세요. 표/목차/각주는 텍스트로 포함하세요. 텍스트가 전혀 없으면 정확히 "NO_TEXT_CONTENT"만 응답하세요.'
+                    },
+                    {
+                      type: 'image_url',
+                      image_url: {
+                        url: `data:application/pdf;base64,${base64}`
+                      }
+                    }
+                  ]
+                }
+              ],
+            }),
+          });
+
+          if (extractResponse.ok) {
+            const extractResult = await extractResponse.json();
+            const aiText = extractResult?.choices?.[0]?.message?.content ?? '';
+            if (aiText && !/NO_TEXT_CONTENT/i.test(aiText) && aiText.trim().length >= 50) {
+              extractedText = aiText.trim();
+              hasTextContent = true;
+              noTextReason = '';
+              console.log(`AI OCR extracted ~${extractedText.length} characters.`);
+            } else {
+              hasTextContent = false;
+              console.warn('AI OCR indicates no text content or too short output.');
+            }
+          } else {
+            const errText = await extractResponse.text();
+            console.error('AI OCR request failed:', extractResponse.status, errText);
+            hasTextContent = false;
+          }
+        } catch (e) {
+          console.error('AI OCR fallback error:', e);
+          hasTextContent = false;
+        }
+      } else {
+        console.warn('LOVABLE_API_KEY not configured; skipping AI OCR fallback.');
+        hasTextContent = false;
+      }
+    }
+
+    // Final fallback placeholder to keep pipeline moving
+    if (!extractedText || extractedText.length < 50) {
       hasTextContent = false;
       noTextReason = 'PDF 파일에 텍스트가 포함되어 있지 않습니다. 이미지 기반 PDF이거나 스캔된 문서일 수 있습니다. 텍스트가 포함된 PDF로 다시 제출하거나, 문서 제출 요건에 따라 원본 텍스트 파일을 함께 제출해 주세요.';
       extractedText = `[텍스트 없음] ${filePath} - 대체 근거: 의료기기 허가 신고 시 제출 서류는 텍스트 형식으로 제출되어야 하며, 검토 가능한 형태여야 합니다.`;
-      console.warn('PDF contains no extractable text');
     }
 
-    console.log(`Extracted ~${extractedText.length} characters (lightweight mode). Has text: ${hasTextContent}`);
+    console.log(`Extracted ~${extractedText.length} characters. Has text: ${hasTextContent}`);
 
     // Chunk the document (split into ~500 word chunks) for storage
     const chunks = chunkText(extractedText, 500);

@@ -47,13 +47,15 @@ Deno.serve(async (req) => {
     const visibleSpans = latin1.match(/[ -~]{4,}/g) || [];
     let extractedText = visibleSpans.join(' ').replace(/\s+/g, ' ').trim();
 
+    // 🚨 Force AI OCR fallback: Ignore ASCII extraction result
+    extractedText = '';
+
     let hasTextContent = true;
     let noTextReason = '';
 
     // Step 2: AI OCR fallback when ASCII extraction fails (typical for Korean PDFs)
     if (!extractedText || extractedText.length < 50) {
       console.warn('ASCII extraction insufficient. Trying AI OCR fallback...');
-      extractedText = ''; // Initialize to empty before AI OCR attempt
       console.warn('ASCII extraction yielded insufficient text. Trying AI OCR fallback...');
       const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
       if (LOVABLE_API_KEY) {
@@ -74,7 +76,7 @@ Deno.serve(async (req) => {
                   content: [
                     {
                       type: 'text',
-                      text: '당신은 법률 문서의 텍스트를 전문적으로 추출하는 시스템입니다. 1. 첨부된 PDF 파일은 한국의 법률 또는 규정 문서입니다. 2. 당신은 이 PDF를 읽고 페이지당 유효한 텍스트 콘텐츠를 추출해야 합니다. 3. 다음 형식에 따라 모든 페이지의 텍스트를 추출해 주세요. 출력 형식: 페이지 구분자를 사용하여 응답합니다. 예시: --- PAGE 1 --- (텍스트 내용) --- PAGE 2 --- (텍스트 내용) 4. 만약 PDF를 읽는 데 실패하거나 텍스트가 50자 미만으로 추출될 경우, 다른 응답 없이 대문자로 "NO_TEXT_CONTENT"만 응답하세요.'
+                      text: '당신은 의료기기 심사 문서 OCR 시스템입니다. 이 PDF 파일(제출 문서)의 모든 한글 텍스트를 원문 구조와 줄바꿈을 최대한 유지하며 추출해 주세요. PDF 처리 실패 시 "NO_TEXT_CONTENT"만 응답하세요.'
                     },
                     {
                       type: 'image_url',

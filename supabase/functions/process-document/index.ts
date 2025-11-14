@@ -42,12 +42,7 @@ Deno.serve(async (req) => {
     const arrayBuffer = await fileData.arrayBuffer();
     const bytes = new Uint8Array(arrayBuffer);
 
-    console.log('Attempting lightweight text extraction from PDF bytes...');
-
-    // Lightweight ASCII extraction (fast but ASCII-only)
-    // 1) Decode bytes as latin1
-    // 2) Collect visible ASCII spans (length >= 4)
-    // 3) Join and normalize whitespace
+    // Step 1: Lightweight ASCII extraction
     const latin1 = new TextDecoder('latin1').decode(bytes);
     const visibleSpans = latin1.match(/[ -~]{4,}/g) || [];
     let extractedText = visibleSpans.join(' ').replace(/\s+/g, ' ').trim();
@@ -55,8 +50,10 @@ Deno.serve(async (req) => {
     let hasTextContent = true;
     let noTextReason = '';
 
-    // If ASCII pass fails (likely for Korean PDFs), try OCR/text extraction via Lovable AI
+    // Step 2: AI OCR fallback when ASCII extraction fails (typical for Korean PDFs)
     if (!extractedText || extractedText.length < 50) {
+      console.warn('ASCII extraction insufficient. Trying AI OCR fallback...');
+      extractedText = ''; // Initialize to empty before AI OCR attempt
       console.warn('ASCII extraction yielded insufficient text. Trying AI OCR fallback...');
       const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
       if (LOVABLE_API_KEY) {
@@ -77,7 +74,7 @@ Deno.serve(async (req) => {
                   content: [
                     {
                       type: 'text',
-                      text: '당신은 전문적인 OCR 및 문서 분석 시스템입니다. 1. 첨부된 PDF 파일은 한국의 법률 또는 규정 문서입니다. 2. 이 문서의 모든 한글 텍스트를 포함하여 원문 구조(예: "제1조(목적)", "①", "1.")와 줄바꿈을 최대한 유지하며 추출해 주세요. 3. 단 하나의 텍스트 블록으로 응답해야 합니다. 4. 만약 텍스트 추출이 불가능하거나 실패하여 유효한 텍스트가 50자 미만으로 예상된다면, 다른 응답 없이 대문자로 "NO_TEXT_CONTENT"만 응답하세요.'
+                      text: '당신은 법률 문서의 텍스트를 전문적으로 추출하는 시스템입니다. 1. 첨부된 PDF 파일은 한국의 법률 또는 규정 문서입니다. 2. 당신은 이 PDF를 읽고 페이지당 유효한 텍스트 콘텐츠를 추출해야 합니다. 3. 다음 형식에 따라 모든 페이지의 텍스트를 추출해 주세요. 출력 형식: 페이지 구분자를 사용하여 응답합니다. 예시: --- PAGE 1 --- (텍스트 내용) --- PAGE 2 --- (텍스트 내용) 4. 만약 PDF를 읽는 데 실패하거나 텍스트가 50자 미만으로 추출될 경우, 다른 응답 없이 대문자로 "NO_TEXT_CONTENT"만 응답하세요.'
                     },
                     {
                       type: 'image_url',
@@ -118,11 +115,46 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Final fallback placeholder to keep pipeline moving
-    if (!extractedText || extractedText.length < 50) {
+    // Step 3: Final validation and failure handling
+    if (!hasTextContent) {
+      noTextReason = 'PDF에서 텍스트 추출 및 AI OCR 처리에 실패했습니다. 파일이 스캔본이거나 비표준 형식일 수 있습니다.';
+      extractedText = '';
+      console.warn('PDF contains no extractable text, aborting chunking.');
+    } else if (extractedText.length < 50) {
       hasTextContent = false;
-      noTextReason = 'PDF 파일에 텍스트가 포함되어 있지 않습니다. 이미지 기반 PDF이거나 스캔된 문서일 수 있습니다. 텍스트가 포함된 PDF로 다시 제출하거나, 문서 제출 요건에 따라 원본 텍스트 파일을 함께 제출해 주세요.';
-      extractedText = `[텍스트 없음] ${filePath} - 대체 근거: 의료기기 허가 신고 시 제출 서류는 텍스트 형식으로 제출되어야 하며, 검토 가능한 형태여야 합니다.`;
+      noTextReason = 'AI OCR에서 추출된 유효 텍스트가 50자 미만입니다.';
+      extractedText = '';
+      console.warn('AI OCR returned insufficient text, aborting chunking.');
+    }
+
+    // Abort chunk processing if no valid text content
+    if (extractedText.length < 50) {
+      console.warn('Aborting chunk processing due to lack of valid text content.');
+
+      // Update submission status to failed
+      if (!isRegulation) {
+        await supabase
+          .from('submissions')
+          .update({ 
+            status: 'failed',
+            // Optionally store reason in a metadata field if available
+          })
+          .eq('id', submissionId);
+      }
+
+      return new Response(
+        JSON.stringify({ 
+          success: false, 
+          chunksProcessed: 0,
+          hasTextContent: false,
+          reason: noTextReason || 'No valid text content extracted',
+          message: 'Document processing failed due to lack of extractable text'
+        }),
+        { 
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        }
+      );
     }
 
     console.log(`Extracted ~${extractedText.length} characters. Has text: ${hasTextContent}`);

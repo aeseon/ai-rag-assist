@@ -60,8 +60,18 @@ Deno.serve(async (req) => {
       const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
       if (LOVABLE_API_KEY) {
         try {
-          // Encode full PDF as base64 for the AI gateway
-          const base64 = btoa(String.fromCharCode(...bytes));
+          // Encode full PDF as base64 for the AI gateway (robust + size-limited)
+          const SLICE_LIMIT = 1024 * 1024; // 1MB
+          const toEncode = bytes.length > SLICE_LIMIT ? bytes.subarray(0, SLICE_LIMIT) : bytes;
+          let binaryStr = '';
+          const CHUNK = 0x8000; // 32KB per chunk to avoid stack/memory issues
+          for (let i = 0; i < toEncode.length; i += CHUNK) {
+            const sub = toEncode.subarray(i, i + CHUNK);
+            let s = '';
+            for (let j = 0; j < sub.length; j++) s += String.fromCharCode(sub[j]);
+            binaryStr += s;
+          }
+          const base64 = btoa(binaryStr);
           const extractResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
             method: 'POST',
             headers: {
